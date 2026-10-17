@@ -95,7 +95,10 @@ async def export_document(
             media_type="application/pdf",
             headers={
                 "Content-Disposition": f'attachment; filename="{output_filename}"',
-                "Content-Length": str(len(pdf_bytes))
+                "Content-Length": str(len(pdf_bytes)),
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
             }
         )
     except KeyError:
