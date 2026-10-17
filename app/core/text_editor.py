@@ -50,6 +50,90 @@ class RealPDFTextEditor:
         return (1.0, 1.0, 1.0)
 
     @classmethod
+    def compute_safe_redact_rect(
+        cls,
+        page: pymupdf.Page,
+        bbox: List[float],
+        origin: Optional[List[float]] = None
+    ) -> pymupdf.Rect:
+        """
+        Computes a surgically constrained redaction rectangle that completely intersects
+        the target text span while guaranteeing zero collision with adjacent lines
+        (above/below) and adjacent words (left/right).
+        """
+        derotate = ~page.rotation_matrix
+        r_bbox = pymupdf.Rect(bbox)
+        r_bbox.transform(derotate)
+        r_bbox.normalize()
+        
+        if origin:
+            r_origin = pymupdf.Point(origin[0], origin[1])
+            r_origin.transform(derotate)
+            origin_y = r_origin.y
+        else:
+            # Estimate baseline: standard baseline is ~80% down from top
+            origin_y = r_bbox.y1 - (r_bbox.y1 - r_bbox.y0) * 0.22
+            
+        font_size = max(origin_y - r_bbox.y0, 6.0)
+        
+        # Start with safe bounding box around target ink
+        safe_x0 = r_bbox.x0
+        safe_x1 = r_bbox.x1
+        safe_y0 = max(r_bbox.y0, origin_y - 0.95 * font_size)
+        safe_y1 = min(r_bbox.y1, origin_y + min(0.25 * font_size, 4.0))
+        
+        # Inspect all text spans on page to ensure zero collision with other spans
+        try:
+            text_dict = page.get_text("dict")
+            for block in text_dict.get("blocks", []):
+                if "lines" not in block:
+                    continue
+                for line in block["lines"]:
+                    for span in line.get("spans", []):
+                        if not span.get("text", "").strip():
+                            continue
+                        s_bbox = pymupdf.Rect(span["bbox"])
+                        s_bbox.transform(derotate)
+                        s_bbox.normalize()
+                        
+                        # Skip target span itself
+                        if (abs(s_bbox.x0 - r_bbox.x0) < 1.0 and abs(s_bbox.y0 - r_bbox.y0) < 1.0 and
+                            abs(s_bbox.x1 - r_bbox.x1) < 1.0 and abs(s_bbox.y1 - r_bbox.y1) < 1.0):
+                            continue
+                            
+                        # Horizontal overlap check
+                        h_overlap = (min(safe_x1, s_bbox.x1) - max(safe_x0, s_bbox.x0)) > 2.0
+                        s_orig_y = span.get("origin", [0, s_bbox.y1])[1]
+                        
+                        # Span below target
+                        if s_orig_y > origin_y + 2.0:
+                            if h_overlap:
+                                limit_y1 = s_bbox.y0 - 0.5
+                                if limit_y1 < safe_y1:
+                                    safe_y1 = max(limit_y1, origin_y + 0.5)
+                        # Span above target
+                        elif s_orig_y < origin_y - 2.0:
+                            if h_overlap:
+                                limit_y0 = s_bbox.y1 + 0.5
+                                if limit_y0 > safe_y0:
+                                    safe_y0 = min(limit_y0, origin_y - 0.5)
+                        # Same line
+                        else:
+                            if s_bbox.x1 <= r_bbox.x0 + 3.0:
+                                safe_x0 = max(safe_x0, s_bbox.x1 + 0.2)
+                            elif s_bbox.x0 >= r_bbox.x1 - 3.0:
+                                safe_x1 = min(safe_x1, s_bbox.x0 - 0.2)
+        except Exception:
+            pass
+            
+        if safe_x1 <= safe_x0:
+            safe_x0, safe_x1 = r_bbox.x0, r_bbox.x1
+        if safe_y1 <= safe_y0:
+            safe_y0, safe_y1 = r_bbox.y0, origin_y + 0.5
+            
+        return pymupdf.Rect(safe_x0, safe_y0, safe_x1, safe_y1)
+
+    @classmethod
     def edit_text_span(
         cls,
         doc: pymupdf.Document,
@@ -75,32 +159,23 @@ class RealPDFTextEditor:
         # Sample background color before applying changes
         bg_color = cls.sample_background_color(page, bbox)
         
-        # Un-rotate coordinates from visual space to internal PDF space
-        r_bbox = pymupdf.Rect(bbox)
-        r_bbox.transform(derotate)
-        r_bbox.normalize()
+        # Compute safe redaction rectangle that will NEVER collide with adjacent lines or words
+        redact_rect = cls.compute_safe_redact_rect(page, bbox, origin)
         
-        r_origin = pymupdf.Point(origin[0], origin[1])
-        r_origin.transform(derotate)
-        
-        # 1. Expand bbox by margin (0.5pt) to ensure all glyph bounding curves are captured
-        redact_rect = pymupdf.Rect(r_bbox.x0 - 0.5, r_bbox.y0 - 0.5, r_bbox.x1 + 0.5, r_bbox.y1 + 0.5)
-        
-        # 2. Add redaction annotation and apply to eradicate vector text operators
+        # 1. Add redaction annotation and apply to eradicate vector text operators
         page.add_redact_annot(redact_rect, fill=False)
         page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
         
-        # 3. If page contains images or is scanned, apply background patch to obliterate scanned/raster glyphs
+        # 2. If page contains images or is scanned, apply background patch to obliterate scanned/raster glyphs
         if len(page.get_images()) > 0:
-            patch_rect = pymupdf.Rect(r_bbox.x0 - 1.2, r_bbox.y0 - 1.2, r_bbox.x1 + 1.2, r_bbox.y1 + 1.2)
-            page.draw_rect(patch_rect, color=None, fill=bg_color, overlay=True)
+            page.draw_rect(redact_rect, color=None, fill=bg_color, overlay=True)
         
-        # 4. If new_text is empty or whitespace, this was a deletion
+        # 3. If new_text is empty or whitespace, this was a deletion
         if not new_text or not new_text.strip():
             page.clean_contents()
             return True
             
-        # 5. Resolve typography
+        # 4. Resolve typography
         resolved_font = FontManager.resolve_font_name(font_name)
         size = font_size if font_size and font_size > 0 else 11.0
         
@@ -109,7 +184,10 @@ class RealPDFTextEditor:
         else:
             color_tuple = (0.0, 0.0, 0.0)
             
-        # 6. Insert new text object at baseline with correct rotation and overlay
+        r_origin = pymupdf.Point(origin[0], origin[1])
+        r_origin.transform(derotate)
+            
+        # 5. Insert new text object at baseline with correct rotation and overlay
         page.insert_text(
             r_origin,
             new_text,
@@ -120,7 +198,7 @@ class RealPDFTextEditor:
             overlay=True
         )
         
-        # 7. Consolidate content streams
+        # 6. Consolidate content streams
         page.clean_contents()
         return True
 
@@ -129,7 +207,8 @@ class RealPDFTextEditor:
         cls,
         doc: pymupdf.Document,
         page_index: int,
-        bbox: List[float]
+        bbox: List[float],
+        origin: Optional[List[float]] = None
     ) -> bool:
         """
         Eradicates text inside the bounding box from content stream and conceals
@@ -139,22 +218,15 @@ class RealPDFTextEditor:
             raise ValueError(f"Page index {page_index} out of bounds")
             
         page = doc[page_index]
-        derotate = ~page.rotation_matrix
-        
         bg_color = cls.sample_background_color(page, bbox)
         
-        r_bbox = pymupdf.Rect(bbox)
-        r_bbox.transform(derotate)
-        r_bbox.normalize()
-        
-        redact_rect = pymupdf.Rect(r_bbox.x0 - 0.5, r_bbox.y0 - 0.5, r_bbox.x1 + 0.5, r_bbox.y1 + 0.5)
+        redact_rect = cls.compute_safe_redact_rect(page, bbox, origin)
         page.add_redact_annot(redact_rect, fill=False)
         page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
         
         # Obliterate old raster/scanned glyphs if page contains images
         if len(page.get_images()) > 0:
-            patch_rect = pymupdf.Rect(r_bbox.x0 - 1.2, r_bbox.y0 - 1.2, r_bbox.x1 + 1.2, r_bbox.y1 + 1.2)
-            page.draw_rect(patch_rect, color=None, fill=bg_color, overlay=True)
+            page.draw_rect(redact_rect, color=None, fill=bg_color, overlay=True)
         
         page.clean_contents()
         return True

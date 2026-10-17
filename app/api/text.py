@@ -46,7 +46,8 @@ async def delete_text(doc_id: str, req: TextDeleteRequest):
             RealPDFTextEditor.delete_text_span(
                 doc=session.doc,
                 page_index=req.page_index,
-                bbox=req.bbox
+                bbox=req.bbox,
+                origin=req.origin
             )
             session.save_to_disk()
         return engine_manager.inspect_page(doc_id, req.page_index)

@@ -62,17 +62,78 @@ class RealPDFOCREngine:
         injected_spans = 0
         for block in ocr_data.get("blocks", []):
             for line in block.get("lines", []):
-                for span in line.get("spans", []):
-                    text = span.get("text", "").strip()
+                raw_spans = line.get("spans", [])
+                merged_words = []
+                cur_word = None
+                for s in raw_spans:
+                    raw_text = s.get("text", "")
+                    if not raw_text or raw_text.isspace():
+                        if cur_word:
+                            merged_words.append(cur_word)
+                            cur_word = None
+                        continue
+
+                    has_leading_space = raw_text.startswith(" ")
+                    has_trailing_space = raw_text.endswith(" ")
+                    clean_text = raw_text.strip()
+
+                    if has_leading_space and cur_word:
+                        merged_words.append(cur_word)
+                        cur_word = None
+
+                    if cur_word is None:
+                        cur_word = {
+                            "text": clean_text,
+                            "bbox": list(s["bbox"]),
+                            "origin": s.get("origin", [s["bbox"][0], s["bbox"][3]]),
+                            "size": s.get("size", 10.0),
+                            "flags": s.get("flags", 0)
+                        }
+                    else:
+                        cur_word["text"] += clean_text
+                        cur_word["bbox"][2] = s["bbox"][2]
+                        cur_word["bbox"][3] = max(cur_word["bbox"][3], s["bbox"][3])
+
+                    if has_trailing_space:
+                        merged_words.append(cur_word)
+                        cur_word = None
+
+                if cur_word:
+                    merged_words.append(cur_word)
+
+                for word in merged_words:
+                    text = word["text"].strip()
                     if not text:
                         continue
-                    origin = span.get("origin")
-                    size = span.get("size", 10.0)
+                    origin = word["origin"]
+                    size = word["size"]
+                    w_bbox = pymupdf.Rect(word["bbox"])
+
+                    # Auto-detect bold font from ink density in the scanned image
+                    is_bold = bool(word.get("flags", 0) & 16)
+                    if not is_bold and w_bbox.width > 0 and w_bbox.height > 0:
+                        try:
+                            clip = page.get_pixmap(clip=w_bbox.intersect(page.rect))
+                            if clip.width > 0 and clip.height > 0:
+                                total_pixels = clip.width * clip.height
+                                dark_count = 0
+                                for cy in range(clip.height):
+                                    for cx in range(clip.width):
+                                        px = clip.pixel(cx, cy)
+                                        lum = 0.299 * px[0] + 0.587 * px[1] + 0.114 * px[2]
+                                        if lum < 175:
+                                            dark_count += 1
+                                if (dark_count / total_pixels) >= 0.18:
+                                    is_bold = True
+                        except Exception:
+                            pass
+
+                    font_name = "hebo" if is_bold else "helv"
                     if origin and len(origin) == 2:
                         page.insert_text(
                             pymupdf.Point(origin[0], origin[1]),
                             text,
-                            fontname="helv",
+                            fontname=font_name,
                             fontsize=max(size, 6.0),
                             render_mode=3  # PDF standard invisible searchable text layer
                         )

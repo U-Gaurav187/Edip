@@ -484,9 +484,12 @@
           
           <div class="editor-controls-row">
             <select id="editFontFamily" style="max-width: 140px; text-overflow: ellipsis;">
-              <option value="helv">Helvetica / Sans</option>
-              <option value="tiro">Times / Serif</option>
-              <option value="cour">Courier / Mono</option>
+              <option value="helv">Helvetica Regular</option>
+              <option value="hebo">Helvetica Bold</option>
+              <option value="tiro">Times Regular</option>
+              <option value="tibo">Times Bold</option>
+              <option value="cour">Courier Regular</option>
+              <option value="cobo">Courier Bold</option>
             </select>
             <input type="number" id="editFontSize" min="1" max="288" step="0.1" style="width: 70px;" title="Font Size" />
             <input type="color" id="editFontColor" value="#000000" style="width: 36px; height: 28px; border: none; background: none; cursor: pointer;" title="Font Color" />
@@ -808,9 +811,18 @@
       });
     }
 
+    // Track original state to prevent accidental or redundant edits
+    let origSpanOrigin = null;
+    let origSpanText = "";
+    let origSpanFontSize = 0;
+    let origSpanFontFamily = "";
+    let origSpanColor = "";
+
     // Open text editor popover at the clicked hotspot
     function openTextEditor(span, hotspotElem) {
       activeSpan = span;
+      origSpanOrigin = [...span.origin];
+      origSpanText = span.text || "";
 
       // Unselect other hotspots
       document.querySelectorAll('.text-hotspot').forEach(el => el.classList.remove('selected'));
@@ -820,32 +832,35 @@
       document.getElementById('editTextValue').value = span.text;
       
       // Keep exact font size without excessive rounding
-      document.getElementById('editFontSize').value = Number(span.size).toFixed(1);
+      const fSize = Number(span.size).toFixed(1);
+      document.getElementById('editFontSize').value = fSize;
+      origSpanFontSize = parseFloat(fSize);
 
-      // Handle font family mapping so the original font isn't lost
+      // Handle font family mapping with automatic bold detection
       const fontSelect = document.getElementById('editFontFamily');
-      let foundOption = Array.from(fontSelect.options).find(opt => opt.value === span.font || opt.value.toLowerCase() === span.font.toLowerCase());
-      
-      if (!foundOption) {
-        // Add original font as the default selected option if it's not helv/times/couri
-        const opt = document.createElement('option');
-        opt.value = span.font;
-        opt.text = `Original: ${span.font}`;
-        fontSelect.insertBefore(opt, fontSelect.firstChild);
-        fontSelect.value = span.font;
+      const isBold = span.font.toLowerCase().includes('bold') || (span.flags && (span.flags & 16) !== 0) || span.font.toLowerCase().includes('hebo') || span.font.toLowerCase().includes('tibo');
+      const isSerif = span.font.toLowerCase().includes('time') || span.font.toLowerCase().includes('serif');
+      const isMono = span.font.toLowerCase().includes('couri') || span.font.toLowerCase().includes('mono');
+
+      if (isSerif) {
+        fontSelect.value = isBold ? "tibo" : "tiro";
+      } else if (isMono) {
+        fontSelect.value = isBold ? "cobo" : "cour";
       } else {
-        fontSelect.value = foundOption.value;
+        fontSelect.value = isBold ? "hebo" : "helv";
       }
+      origSpanFontFamily = fontSelect.value;
 
       // Color
       if (span.color_rgb && span.color_rgb.length === 3) {
         const r = Math.round(span.color_rgb[0] * 255).toString(16).padStart(2, '0');
         const g = Math.round(span.color_rgb[1] * 255).toString(16).padStart(2, '0');
         const b = Math.round(span.color_rgb[2] * 255).toString(16).padStart(2, '0');
-        document.getElementById('editFontColor').value = `#${r}${g}${b}`;
+        origSpanColor = `#${r}${g}${b}`;
       } else {
-        document.getElementById('editFontColor').value = '#000000';
+        origSpanColor = '#000000';
       }
+      document.getElementById('editFontColor').value = origSpanColor;
 
       // Position popover
       const [x0, y0, x1, y1] = span.bbox;
@@ -857,9 +872,13 @@
     }
 
     function closeTextEditor() {
+      if (activeSpan && origSpanOrigin) {
+        activeSpan.origin = [...origSpanOrigin];
+      }
       document.getElementById('textEditorPopover').style.display = 'none';
       document.querySelectorAll('.text-hotspot').forEach(el => el.classList.remove('selected'));
       activeSpan = null;
+      origSpanOrigin = null;
     }
 
     // Apply surgical text replacement
@@ -874,6 +893,19 @@
       const r = parseInt(hexColor.substr(1,2), 16) / 255.0;
       const g = parseInt(hexColor.substr(3,2), 16) / 255.0;
       const b = parseInt(hexColor.substr(5,2), 16) / 255.0;
+
+      // Guard: If nothing changed, safely exit without server roundtrip or redaction
+      const originMoved = origSpanOrigin && (Math.abs(activeSpan.origin[0] - origSpanOrigin[0]) > 0.5 || Math.abs(activeSpan.origin[1] - origSpanOrigin[1]) > 0.5);
+      const textChanged = (newText !== origSpanText);
+      const sizeChanged = (Math.abs(fontSize - origSpanFontSize) > 0.1);
+      const fontChanged = (fontName !== origSpanFontFamily);
+      const colorChanged = (hexColor.toLowerCase() !== origSpanColor.toLowerCase());
+
+      if (!originMoved && !textChanged && !sizeChanged && !fontChanged && !colorChanged) {
+        closeTextEditor();
+        showToast("No changes detected.");
+        return;
+      }
 
       showToast("Performing surgical PDF object replacement...");
 
@@ -918,7 +950,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             page_index: currentPageIndex,
-            bbox: activeSpan.bbox
+            bbox: activeSpan.bbox,
+            origin: activeSpan.origin
           })
         });
 
@@ -931,6 +964,26 @@
         alert("Delete failed: " + err.message);
       }
     }
+
+    // Close popover on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const popover = document.getElementById('textEditorPopover');
+        if (popover && popover.style.display === 'block') {
+          closeTextEditor();
+        }
+      }
+    });
+
+    // Close popover when clicking anywhere outside of popover and hotspots
+    document.addEventListener('mousedown', (e) => {
+      const popover = document.getElementById('textEditorPopover');
+      if (popover && popover.style.display === 'block') {
+        if (!popover.contains(e.target) && !e.target.closest('.text-hotspot') && !e.target.closest('.image-hotspot')) {
+          closeTextEditor();
+        }
+      }
+    });
 
     // Delete image
     async function deleteImage(xref) {

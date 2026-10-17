@@ -13,6 +13,7 @@ class TextEditRequest(BaseModel):
 class TextDeleteRequest(BaseModel):
     page_index: int
     bbox: List[float] = Field(..., description="Bounding box to surgically excise from content stream")
+    origin: Optional[List[float]] = Field(default=None, description="Optional baseline origin coordinates [x, y]")
 
 class TextInsertRequest(BaseModel):
     page_index: int

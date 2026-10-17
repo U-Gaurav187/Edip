@@ -299,10 +299,14 @@ class PDFEngineManager:
         # 7. Scanned detection
         is_scanned = RealPDFOCREngine.is_page_scanned(page)
 
+        rot_rect = page_rect.transform(rot_mat)
+        p_width = round(abs(rot_rect.width), 2)
+        p_height = round(abs(rot_rect.height), 2)
+
         return PageInspection(
             page_index=page_index,
-            width=round(page_rect.width, 2),
-            height=round(page_rect.height, 2),
+            width=p_width,
+            height=p_height,
             rotation=page.rotation,
             is_scanned=is_scanned,
             text_blocks=text_blocks,
