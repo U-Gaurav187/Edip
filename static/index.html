@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acrobat-Grade Native PDF Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #121417;
+      --bg-panel: #1a1d23;
+      --bg-toolbar: #22262f;
+      --border-color: #2e3440;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-active: #3b82f6;
+      --danger: #ef4444;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --overlay-text-hover: rgba(37, 99, 235, 0.25);
+      --overlay-text-active: rgba(37, 99, 235, 0.5);
+      --overlay-image-hover: rgba(16, 185, 129, 0.25);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top Bar */
+    header {
+      background: var(--bg-toolbar);
+      border-bottom: 1px solid var(--border-color);
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.2px;
+    }
+
+    .brand svg {
+      width: 24px;
+      height: 24px;
+      fill: #e11d48;
+    }
+
+    .doc-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+      max-width: 250px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      background: #2b303c;
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .btn:hover {
+      background: #373e4d;
+      border-color: #4b5563;
+    }
+
+    .btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-success {
+      background: #059669;
+      border-color: #059669;
+      color: white;
+    }
+    .btn-success:hover {
+      background: #047857;
+    }
+
+    /* Main Container */
+    .app-workspace {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Left Sidebar: Pages */
+    .sidebar-pages {
+      width: 200px;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .sidebar-header {
+      padding: 12px;
+      font-size: 12px;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .thumbnail-list {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .thumbnail-card {
+      background: var(--bg-dark);
+      border: 2px solid transparent;
+      border-radius: 6px;
+      padding: 6px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+
+    .thumbnail-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
+    }
+
+    .thumbnail-card img {
+      width: 100%;
+      height: auto;
+      border-radius: 4px;
+      display: block;
+      background: #fff;
+    }
+
+    .thumbnail-label {
+      font-size: 11px;
+      margin-top: 6px;
+      color: var(--text-muted);
+    }
+
+    /* Center: Viewport */
+    .viewport {
+      flex: 1;
+      background: #0b0d0f;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px;
+      position: relative;
+    }
+
+    .page-stage {
+      position: relative;
+      background: #ffffff;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+      user-select: none;
+    }
+
+    #pageCanvasImg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    /* Interactive Overlay */
+    .overlay-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: auto;
+    }
+
+    .text-hotspot {
+      position: absolute;
+      box-sizing: border-box;
+      border: 1px dashed transparent;
+      cursor: text;
+      transition: background-color 0.1s ease, border-color 0.1s ease;
+    }
+
+    .text-hotspot:hover {
+      background-color: var(--overlay-text-hover);
+      border-color: var(--accent);
+    }
+
+    .text-hotspot.selected {
+      background-color: var(--overlay-text-active);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    .image-hotspot {
+      position: absolute;
+      border: 1px dashed transparent;
+      cursor: pointer;
+    }
+
+    .image-hotspot:hover {
+      background-color: var(--overlay-image-hover);
+      border-color: var(--success);
+    }
+
+    /* Right Sidebar: Inspector */
+    .sidebar-inspector {
+      width: 320px;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .inspector-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .section-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    .prop-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .prop-label {
+      color: var(--text-muted);
+    }
+
+    .prop-val {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-main);
+    }
+
+    /* Editor Modal / Float Box */
+    .editor-popover {
+      position: absolute;
+      background: var(--bg-panel);
+      border: 1px solid #3b82f6;
+      border-radius: 8px;
+      padding: 14px;
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.7);
+      z-index: 9999;
+      width: 340px;
+      display: none;
+    }
+
+    .editor-popover input[type="text"] {
+      width: 100%;
+      background: #111418;
+      border: 1px solid var(--border-color);
+      color: white;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .editor-popover input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .editor-controls-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+
+    .editor-controls-row select, .editor-controls-row input[type="number"] {
+      background: #111418;
+      border: 1px solid var(--border-color);
+      color: white;
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-clean {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+    }
+
+    /* Empty Upload Screen */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+      padding: 40px;
+    }
+
+    .upload-box {
+      border: 2px dashed #3b4252;
+      border-radius: 12px;
+      padding: 60px 40px;
+      background: rgba(26, 29, 35, 0.5);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      max-width: 460px;
+      width: 100%;
+    }
+
+    .upload-box:hover {
+      border-color: var(--accent);
+      background: rgba(37, 99, 235, 0.05);
+    }
+
+    .upload-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    /* Toast Notification */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1e293b;
+      border: 1px solid var(--accent);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 1000;
+    }
+
+    #toast.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header Navigation -->
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9.5 8.5h-2v-4h2c.83 0 1.5.67 1.5 1.5v1c0 .83-.67 1.5-1.5 1.5zm6 4h-1.5v-2h-1v2H11v-7h2.5c.83 0 1.5.67 1.5 1.5v1.5c0 .6-.35 1.11-.86 1.34L15.5 15.5z"/></svg>
+      <span>Acrobat Studio</span>
+      <span class="status-badge badge-clean">Real Object Engine</span>
+    </div>
+
+    <div class="doc-meta" id="docTitle">No document loaded</div>
+
+    <div class="toolbar-actions" id="activeToolbar" style="display: none;">
+      <button class="btn" id="btnPrevPage" onclick="prevPage()">◀</button>
+      <span id="pageCounter" style="font-size: 13px; font-weight: 500;">Page 1 / 1</span>
+      <button class="btn" id="btnNextPage" onclick="nextPage()">▶</button>
+
+      <div style="width: 1px; height: 24px; background: var(--border-color); margin: 0 4px;"></div>
+
+      <button class="btn" onclick="rotateCurrentPage(90)">↻ Rotate 90°</button>
+      
+      <div style="width: 1px; height: 24px; background: var(--border-color); margin: 0 4px;"></div>
+
+      <button class="btn btn-success" onclick="exportPDF('pdf')">💾 Export Clean PDF</button>
+      <button class="btn" onclick="exportPDF('flattened')">Flatten</button>
+    </div>
+
+    <div>
+      <input type="file" id="fileInput" accept="application/pdf" style="display: none;" onchange="handleFileSelected(event)">
+      <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Upload PDF</button>
+    </div>
+  </header>
+
+  <!-- Workspace Container -->
+  <div class="app-workspace">
+    
+    <!-- Left Sidebar: Page Thumbnails -->
+    <div class="sidebar-pages" id="pagesSidebar" style="display: none;">
+      <div class="sidebar-header">Pages (<span id="sidebarPageCount">0</span>)</div>
+      <div class="thumbnail-list" id="thumbnailsContainer"></div>
+    </div>
+
+    <!-- Central Viewport -->
+    <div class="viewport" id="viewport">
+      <div class="empty-state" id="emptyState">
+        <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+          <div class="upload-icon">📄</div>
+          <h2 style="margin-bottom: 8px;">Open a PDF to Edit</h2>
+          <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+            Real ISO 32000-1 PDF object editing. No white rectangle overlays. No image hacks.
+          </p>
+          <button class="btn btn-primary">Browse PDF File</button>
+        </div>
+      </div>
+
+      <div class="page-stage" id="pageStage" style="display: none;">
+        <img id="pageCanvasImg" alt="PDF Rendered Page" />
+        <div class="overlay-layer" id="overlayLayer"></div>
+        
+        <!-- Floating Text Editor Popover -->
+        <div class="editor-popover" id="textEditorPopover">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--accent);">
+              Direct PDF Text Object Editor
+            </div>
+            <div style="font-size: 10px; background: rgba(59, 130, 246, 0.2); color: #93c5fd; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59, 130, 246, 0.5);">
+              ✥ Drag blue box to move
+            </div>
+          </div>
+          <textarea id="editTextValue" placeholder="Type replacement text... (Press Enter for new line)" rows="3" style="width: 100%; margin-bottom: 10px; background: #111418; border: 1px solid var(--border-color); color: white; padding: 8px 10px; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
+          
+          <div class="editor-controls-row">
+            <select id="editFontFamily" style="max-width: 140px; text-overflow: ellipsis;">
+              <option value="helv">Helvetica / Sans</option>
+              <option value="tiro">Times / Serif</option>
+              <option value="cour">Courier / Mono</option>
+            </select>
+            <input type="number" id="editFontSize" min="1" max="288" step="0.1" style="width: 70px;" title="Font Size" />
+            <input type="color" id="editFontColor" value="#000000" style="width: 36px; height: 28px; border: none; background: none; cursor: pointer;" title="Font Color" />
+          </div>
+
+          <div style="display: flex; justify-content: space-between; gap: 8px;">
+            <button class="btn btn-primary" style="flex: 1;" onclick="applyTextEdit()">Apply Edit</button>
+            <button class="btn" style="color: var(--danger);" onclick="deleteSelectedText()">Delete</button>
+            <button class="btn" onclick="closeTextEditor()">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Sidebar: Object Tree & Stream Inspector -->
+    <div class="sidebar-inspector" id="inspectorSidebar" style="display: none;">
+      <div class="inspector-section">
+        <div class="section-title">Document Metadata</div>
+        <div class="prop-row"><span class="prop-label">Pages:</span><span class="prop-val" id="metaPages">-</span></div>
+        <div class="prop-row"><span class="prop-label">Encrypted:</span><span class="prop-val" id="metaEncrypted">No</span></div>
+        <div class="prop-row"><span class="prop-label">PDF/A:</span><span class="prop-val" id="metaPDFA">No</span></div>
+      </div>
+
+      <div class="inspector-section">
+        <div class="section-title">Current Page Objects</div>
+        <div class="prop-row"><span class="prop-label">Dimensions:</span><span class="prop-val" id="pageDimensions">-</span></div>
+        <div class="prop-row"><span class="prop-label">Rotation:</span><span class="prop-val" id="pageRotation">0°</span></div>
+        <div class="prop-row"><span class="prop-label">Text Blocks:</span><span class="prop-val" id="pageTextCount">0</span></div>
+        <div class="prop-row"><span class="prop-label">Images:</span><span class="prop-val" id="pageImageCount">0</span></div>
+        <div class="prop-row"><span class="prop-label">Vector Paths:</span><span class="prop-val" id="pageDrawingCount">0</span></div>
+        <div class="prop-row"><span class="prop-label">Scanned Status:</span><span class="prop-val" id="pageScannedStatus">Clean</span></div>
+      </div>
+
+      <div class="inspector-section">
+        <div class="section-title">Embedded Fonts</div>
+        <div id="pageFontsList" style="font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px;">
+          None detected
+        </div>
+      </div>
+
+      <div class="inspector-section">
+        <div class="section-title">Object Cleanliness Guarantee</div>
+        <p style="font-size: 12px; color: #10b981; line-height: 1.4;">
+          ✓ Operators physically purged from /Contents.<br/>
+          ✓ True BT ... ET PDF text objects generated.<br/>
+          ✓ 100% searchable & selectable.<br/>
+          ✓ Zero white rectangles or visual overlays.
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="toast">Notification</div>
+
+  <script>
+    // State
+    let currentDocId = null;
+    let documentData = null;
+    let currentPageIndex = 0;
+    let activeSpan = null;
+    let scaleFactor = 1.0;
+
+    // Toast notification
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3500);
+    }
+
+    // File selection
+    async function handleFileSelected(event) {
+      const fileInput = event.target;
+      const file = fileInput.files[0];
+      if (!file) {
+        console.warn('No file selected');
+        return;
+      }
+
+      // Client-side validation
+      console.log('Selected file:', file.name, 'size:', file.size, 'type:', file.type);
+      if (file.size === 0) {
+        alert('Error: The selected file is empty (0 bytes). Please choose a valid PDF.');
+        fileInput.value = '';
+        return;
+      }
+      if (!file.name.toLowerCase().endsWith('.pdf')) {
+        alert('Error: Only PDF files are supported. Selected: ' + file.name);
+        fileInput.value = '';
+        return;
+      }
+
+      showToast('Uploading & parsing PDF objects...');
+
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+
+      try {
+        const resp = await fetch('/api/documents/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const responseBody = await resp.json();
+
+        if (!resp.ok) {
+          const detail = responseBody.detail || JSON.stringify(responseBody);
+          throw new Error(detail);
+        }
+
+        documentData = responseBody;
+        currentDocId = documentData.document_id;
+        currentPageIndex = 0;
+
+        document.getElementById('docTitle').innerText = documentData.filename;
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('pageStage').style.display = 'block';
+        document.getElementById('activeToolbar').style.display = 'flex';
+        document.getElementById('pagesSidebar').style.display = 'flex';
+        document.getElementById('inspectorSidebar').style.display = 'flex';
+
+        document.getElementById('metaPages').innerText = documentData.page_count;
+        document.getElementById('metaEncrypted').innerText = documentData.metadata.is_encrypted ? 'Yes' : 'No';
+        document.getElementById('metaPDFA').innerText = documentData.metadata.is_pdfa ? 'Yes' : 'No';
+
+        renderThumbnails();
+        loadCurrentPage();
+        showToast('PDF parsed successfully - ' + documentData.page_count + ' page(s) loaded!');
+      } catch (err) {
+        console.error('Upload failed:', err);
+        alert('Upload error: ' + err.message);
+      } finally {
+        fileInput.value = '';
+      }
+    }
+
+        // Render left sidebar thumbnails
+    function renderThumbnails() {
+      const container = document.getElementById('thumbnailsContainer');
+      container.innerHTML = "";
+      document.getElementById('sidebarPageCount').innerText = documentData.page_count;
+
+      for (let i = 0; i < documentData.page_count; i++) {
+        const card = document.createElement('div');
+        card.className = `thumbnail-card ${i === currentPageIndex ? 'active' : ''}`;
+        card.onclick = () => switchPage(i);
+
+        const img = document.createElement('img');
+        img.src = `/api/documents/${currentDocId}/pages/${i}/render?dpi=36`;
+        img.loading = "lazy";
+
+        const label = document.createElement('div');
+        label.className = "thumbnail-label";
+        label.innerText = `Page ${i + 1}`;
+
+        card.appendChild(img);
+        card.appendChild(label);
+        container.appendChild(card);
+      }
+    }
+
+    function switchPage(idx) {
+      currentPageIndex = idx;
+      renderThumbnails();
+      loadCurrentPage();
+    }
+
+    function prevPage() {
+      if (currentPageIndex > 0) switchPage(currentPageIndex - 1);
+    }
+
+    function nextPage() {
+      if (currentPageIndex < documentData.page_count - 1) switchPage(currentPageIndex + 1);
+    }
+
+    // Load active page display & interactive overlay
+    async function loadCurrentPage() {
+      closeTextEditor();
+      document.getElementById('pageCounter').innerText = `Page ${currentPageIndex + 1} / ${documentData.page_count}`;
+
+      // 1. Fetch Page Inspection Data
+      const inspResp = await fetch(`/api/documents/${currentDocId}/pages/${currentPageIndex}/inspect`);
+      const pageInfo = await inspResp.json();
+
+      // Update Inspector panel
+      document.getElementById('pageDimensions').innerText = `${pageInfo.width} × ${pageInfo.height} pt`;
+      document.getElementById('pageRotation').innerText = `${pageInfo.rotation}°`;
+      document.getElementById('pageTextCount').innerText = pageInfo.text_blocks.length;
+      document.getElementById('pageImageCount').innerText = pageInfo.images.length;
+      document.getElementById('pageDrawingCount').innerText = pageInfo.drawings.length;
+      document.getElementById('pageScannedStatus').innerText = pageInfo.is_scanned ? "⚠️ Scanned Image" : "Clean Vector/Text";
+      document.getElementById('pageScannedStatus').style.color = pageInfo.is_scanned ? "var(--warning)" : "var(--success)";
+
+      // List Fonts
+      const fontsContainer = document.getElementById('pageFontsList');
+      fontsContainer.innerHTML = "";
+      if (pageInfo.fonts && pageInfo.fonts.length > 0) {
+        pageInfo.fonts.forEach(f => {
+          const div = document.createElement('div');
+          div.innerText = `• ${f.name || f.basefont} (${f.type}${f.is_embedded ? ', embedded' : ''})`;
+          fontsContainer.appendChild(div);
+        });
+      } else {
+        fontsContainer.innerText = "Standard Type1 fonts";
+      }
+
+      // 2. Load rendered image
+      const stage = document.getElementById('pageStage');
+      stage.style.width = `${pageInfo.width}px`;
+      stage.style.height = `${pageInfo.height}px`;
+
+      const img = document.getElementById('pageCanvasImg');
+      img.src = `/api/documents/${currentDocId}/pages/${currentPageIndex}/render?dpi=150&t=${Date.now()}`;
+
+      // 3. Populate Interactive Hotspot Overlay
+      const overlay = document.getElementById('overlayLayer');
+      overlay.innerHTML = "";
+
+      pageInfo.text_blocks.forEach(block => {
+        block.lines.forEach(line => {
+          line.spans.forEach(span => {
+            const [x0, y0, x1, y1] = span.bbox;
+            const w = x1 - x0;
+            const h = y1 - y0;
+
+            if (w <= 0 || h <= 0) return;
+            
+            // Skip invisible layout artifacts (giant spaces) generated by PDF creators
+            if (!span.text || span.text.trim().length === 0) return;
+
+            const spot = document.createElement('div');
+            spot.className = "text-hotspot";
+            spot.style.left = `${x0}px`;
+            spot.style.top = `${y0}px`;
+            spot.style.width = `${w}px`;
+            spot.style.height = `${h}px`;
+            spot.title = `Text: "${span.text}" | Font: ${span.font} ${span.size}pt`;
+
+            let currentX = x0;
+            let currentY = y0;
+
+            spot.onmousedown = (e) => {
+              e.stopPropagation();
+              
+              if (activeSpan !== span) {
+                openTextEditor(span, spot);
+              }
+              
+              let isDragging = false;
+              let startX = e.clientX;
+              let startY = e.clientY;
+              
+              const onMouseMove = (mvEvent) => {
+                const dx = mvEvent.clientX - startX;
+                const dy = mvEvent.clientY - startY;
+                
+                if (!isDragging && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+                  isDragging = true;
+                  spot.style.cursor = "move";
+                }
+                
+                if (isDragging) {
+                  currentX += dx;
+                  currentY += dy;
+                  startX = mvEvent.clientX;
+                  startY = mvEvent.clientY;
+                  
+                  spot.style.left = `${currentX}px`;
+                  spot.style.top = `${currentY}px`;
+                  
+                  // Mutate the original span's origin so Apply Edit sends the new coordinate
+                  span.origin[0] += dx;
+                  span.origin[1] += dy;
+                  
+                  // Move popover along with it
+                  const popover = document.getElementById('textEditorPopover');
+                  if (popover.style.display === 'block') {
+                    const stageW = parseFloat(document.getElementById('pageStage').style.width) || 800;
+                    popover.style.left = `${Math.min(currentX, stageW - 360)}px`;
+                    popover.style.top = `${currentY + h + 10}px`;
+                  }
+                }
+              };
+              
+              const onMouseUp = () => {
+                spot.style.cursor = "text";
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+              };
+              
+              document.addEventListener('mousemove', onMouseMove);
+              document.addEventListener('mouseup', onMouseUp);
+            };
+
+            overlay.appendChild(spot);
+          });
+        });
+      });
+
+      // Also render image hotspots
+      pageInfo.images.forEach(imgObj => {
+        const [ix0, iy0, ix1, iy1] = imgObj.bbox;
+        const spot = document.createElement('div');
+        spot.className = "image-hotspot";
+        spot.style.left = `${ix0}px`;
+        spot.style.top = `${iy0}px`;
+        spot.style.width = `${ix1 - ix0}px`;
+        spot.style.height = `${iy1 - iy0}px`;
+        spot.title = `Image XObject xref=${imgObj.xref} (${imgObj.width}×${imgObj.height})`;
+        spot.onclick = (e) => {
+          e.stopPropagation();
+          if (confirm(`Image object xref ${imgObj.xref}. Delete image from content stream?`)) {
+            deleteImage(imgObj.xref);
+          }
+        };
+        overlay.appendChild(spot);
+      });
+    }
+
+    // Open text editor popover at the clicked hotspot
+    function openTextEditor(span, hotspotElem) {
+      activeSpan = span;
+
+      // Unselect other hotspots
+      document.querySelectorAll('.text-hotspot').forEach(el => el.classList.remove('selected'));
+      hotspotElem.classList.add('selected');
+
+      const popover = document.getElementById('textEditorPopover');
+      document.getElementById('editTextValue').value = span.text;
+      
+      // Keep exact font size without excessive rounding
+      document.getElementById('editFontSize').value = Number(span.size).toFixed(1);
+
+      // Handle font family mapping so the original font isn't lost
+      const fontSelect = document.getElementById('editFontFamily');
+      let foundOption = Array.from(fontSelect.options).find(opt => opt.value === span.font || opt.value.toLowerCase() === span.font.toLowerCase());
+      
+      if (!foundOption) {
+        // Add original font as the default selected option if it's not helv/times/couri
+        const opt = document.createElement('option');
+        opt.value = span.font;
+        opt.text = `Original: ${span.font}`;
+        fontSelect.insertBefore(opt, fontSelect.firstChild);
+        fontSelect.value = span.font;
+      } else {
+        fontSelect.value = foundOption.value;
+      }
+
+      // Color
+      if (span.color_rgb && span.color_rgb.length === 3) {
+        const r = Math.round(span.color_rgb[0] * 255).toString(16).padStart(2, '0');
+        const g = Math.round(span.color_rgb[1] * 255).toString(16).padStart(2, '0');
+        const b = Math.round(span.color_rgb[2] * 255).toString(16).padStart(2, '0');
+        document.getElementById('editFontColor').value = `#${r}${g}${b}`;
+      } else {
+        document.getElementById('editFontColor').value = '#000000';
+      }
+
+      // Position popover
+      const [x0, y0, x1, y1] = span.bbox;
+      const stageW = parseFloat(document.getElementById('pageStage').style.width) || 800;
+      popover.style.left = `${Math.min(x0, stageW - 360)}px`;
+      popover.style.top = `${y1 + 10}px`;
+      popover.style.display = 'block';
+      document.getElementById('editTextValue').focus();
+    }
+
+    function closeTextEditor() {
+      document.getElementById('textEditorPopover').style.display = 'none';
+      document.querySelectorAll('.text-hotspot').forEach(el => el.classList.remove('selected'));
+      activeSpan = null;
+    }
+
+    // Apply surgical text replacement
+    async function applyTextEdit() {
+      if (!activeSpan) return;
+
+      const newText = document.getElementById('editTextValue').value;
+      const fontSize = parseFloat(document.getElementById('editFontSize').value) || activeSpan.size;
+      const fontName = document.getElementById('editFontFamily').value;
+      
+      const hexColor = document.getElementById('editFontColor').value;
+      const r = parseInt(hexColor.substr(1,2), 16) / 255.0;
+      const g = parseInt(hexColor.substr(3,2), 16) / 255.0;
+      const b = parseInt(hexColor.substr(5,2), 16) / 255.0;
+
+      showToast("Performing surgical PDF object replacement...");
+
+      try {
+        const payload = {
+          page_index: currentPageIndex,
+          bbox: activeSpan.bbox,
+          origin: activeSpan.origin,
+          new_text: newText,
+          font_name: fontName,
+          font_size: fontSize,
+          color_rgb: [r, g, b]
+        };
+
+        const resp = await fetch(`/api/documents/${currentDocId}/text/edit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.detail || "Edit failed");
+        }
+
+        closeTextEditor();
+        showToast("Text object replaced in PDF stream!");
+        await loadCurrentPage();
+      } catch (err) {
+        alert("Error applying text edit: " + err.message);
+      }
+    }
+
+    // Delete selected text
+    async function deleteSelectedText() {
+      if (!activeSpan) return;
+      if (!confirm("Surgically delete this text object from PDF content stream?")) return;
+
+      try {
+        const resp = await fetch(`/api/documents/${currentDocId}/text/delete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            page_index: currentPageIndex,
+            bbox: activeSpan.bbox
+          })
+        });
+
+        if (!resp.ok) throw new Error("Delete failed");
+
+        closeTextEditor();
+        showToast("Text object eradicated from content stream.");
+        await loadCurrentPage();
+      } catch (err) {
+        alert("Delete failed: " + err.message);
+      }
+    }
+
+    // Delete image
+    async function deleteImage(xref) {
+      try {
+        const resp = await fetch(`/api/documents/${currentDocId}/images/delete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            page_index: currentPageIndex,
+            xref: xref
+          })
+        });
+        if (!resp.ok) throw new Error("Image delete failed");
+        showToast("Image XObject invocation excised from stream!");
+        await loadCurrentPage();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    // Rotate page
+    async function rotateCurrentPage(delta) {
+      try {
+        const resp = await fetch(`/api/documents/${currentDocId}/pages/rotate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            page_index: currentPageIndex,
+            rotation_delta: delta
+          })
+        });
+        if (!resp.ok) throw new Error("Rotate failed");
+        showToast(`Rotated page ${currentPageIndex + 1} by ${delta}°`);
+        renderThumbnails();
+        loadCurrentPage();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    // Run OCR
+    async function runOCR() {
+      showToast("Running C-native MuPDF OCR on document...");
+      try {
+        const resp = await fetch(`/api/documents/${currentDocId}/ocr`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            page_indices: [currentPageIndex],
+            language: "eng"
+          })
+        });
+        const res = await resp.json();
+        if (!resp.ok) throw new Error(res.detail || "OCR failed");
+        showToast(res.message);
+        loadCurrentPage();
+      } catch (err) {
+        alert("OCR error: " + err.message);
+      }
+    }
+
+    // Export PDF
+    function exportPDF(format = 'pdf') {
+      if (!currentDocId) return;
+      window.open(`/api/documents/${currentDocId}/export?format=${format}&clean_streams=true&deflate=true`, '_blank');
+      showToast(`Exporting clean ${format.toUpperCase()}...`);
+    }
+  </script>
+</body>
+</html>
