@@ -483,16 +483,24 @@
           <textarea id="editTextValue" placeholder="Type replacement text... (Press Enter for new line)" rows="3" style="width: 100%; margin-bottom: 10px; background: #111418; border: 1px solid var(--border-color); color: white; padding: 8px 10px; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
           
           <div class="editor-controls-row">
-            <select id="editFontFamily" style="max-width: 140px; text-overflow: ellipsis;">
+            <select id="editFontFamily" style="flex: 1; min-width: 120px; text-overflow: ellipsis;" onchange="updateFormatButtonStates()">
               <option value="helv">Helvetica Regular</option>
               <option value="hebo">Helvetica Bold</option>
+              <option value="heit">Helvetica Italic</option>
+              <option value="hebi">Helvetica Bold Italic</option>
               <option value="tiro">Times Regular</option>
               <option value="tibo">Times Bold</option>
+              <option value="tiit">Times Italic</option>
+              <option value="tibi">Times Bold Italic</option>
               <option value="cour">Courier Regular</option>
               <option value="cobo">Courier Bold</option>
+              <option value="coit">Courier Italic</option>
+              <option value="cobi">Courier Bold Italic</option>
             </select>
-            <input type="number" id="editFontSize" min="1" max="288" step="0.1" style="width: 70px;" title="Font Size" />
-            <input type="color" id="editFontColor" value="#000000" style="width: 36px; height: 28px; border: none; background: none; cursor: pointer;" title="Font Color" />
+            <button type="button" id="btnToggleBold" class="btn" style="padding: 4px 10px; font-weight: 800; font-size: 13px; min-width: 32px;" onclick="toggleBold()" title="Toggle Bold (B)">B</button>
+            <button type="button" id="btnToggleItalic" class="btn" style="padding: 4px 10px; font-style: italic; font-size: 13px; min-width: 30px;" onclick="toggleItalic()" title="Toggle Italic (I)">I</button>
+            <input type="number" id="editFontSize" min="1" max="288" step="0.1" style="width: 58px;" title="Font Size" />
+            <input type="color" id="editFontColor" value="#000000" style="width: 32px; height: 28px; border: none; background: none; cursor: pointer;" title="Font Color" />
           </div>
 
           <div style="display: flex; justify-content: space-between; gap: 8px;">
@@ -836,20 +844,32 @@
       document.getElementById('editFontSize').value = fSize;
       origSpanFontSize = parseFloat(fSize);
 
-      // Handle font family mapping with automatic bold detection
+      // Handle font family mapping with automatic bold and italic detection
       const fontSelect = document.getElementById('editFontFamily');
-      const isBold = span.font.toLowerCase().includes('bold') || (span.flags && (span.flags & 16) !== 0) || span.font.toLowerCase().includes('hebo') || span.font.toLowerCase().includes('tibo');
-      const isSerif = span.font.toLowerCase().includes('time') || span.font.toLowerCase().includes('serif');
-      const isMono = span.font.toLowerCase().includes('couri') || span.font.toLowerCase().includes('mono');
+      const lowerFont = (span.font || "").toLowerCase();
+      const isBold = lowerFont.includes('bold') || (span.flags && (span.flags & 16) !== 0) || lowerFont.includes('hebo') || lowerFont.includes('tibo') || lowerFont.includes('cobo');
+      const isItalic = lowerFont.includes('italic') || lowerFont.includes('oblique') || (span.flags && (span.flags & 2) !== 0) || lowerFont.includes('heit') || lowerFont.includes('tiit') || lowerFont.includes('coit');
+      const isSerif = lowerFont.includes('time') || lowerFont.includes('serif');
+      const isMono = lowerFont.includes('couri') || lowerFont.includes('mono');
 
       if (isSerif) {
-        fontSelect.value = isBold ? "tibo" : "tiro";
+        if (isBold && isItalic) fontSelect.value = "tibi";
+        else if (isBold) fontSelect.value = "tibo";
+        else if (isItalic) fontSelect.value = "tiit";
+        else fontSelect.value = "tiro";
       } else if (isMono) {
-        fontSelect.value = isBold ? "cobo" : "cour";
+        if (isBold && isItalic) fontSelect.value = "cobi";
+        else if (isBold) fontSelect.value = "cobo";
+        else if (isItalic) fontSelect.value = "coit";
+        else fontSelect.value = "cour";
       } else {
-        fontSelect.value = isBold ? "hebo" : "helv";
+        if (isBold && isItalic) fontSelect.value = "hebi";
+        else if (isBold) fontSelect.value = "hebo";
+        else if (isItalic) fontSelect.value = "heit";
+        else fontSelect.value = "helv";
       }
       origSpanFontFamily = fontSelect.value;
+      updateFormatButtonStates();
 
       // Color
       if (span.color_rgb && span.color_rgb.length === 3) {
@@ -871,6 +891,72 @@
       document.getElementById('editTextValue').focus();
     }
 
+    // Update B and I button highlighting and textarea font styles
+    function updateFormatButtonStates() {
+      const fontSelect = document.getElementById('editFontFamily');
+      const val = fontSelect.value;
+      const isBold = ['hebo', 'hebi', 'tibo', 'tibi', 'cobo', 'cobi'].includes(val);
+      const isItalic = ['heit', 'hebi', 'tiit', 'tibi', 'coit', 'cobi'].includes(val);
+
+      const btnB = document.getElementById('btnToggleBold');
+      const btnI = document.getElementById('btnToggleItalic');
+      const textarea = document.getElementById('editTextValue');
+
+      if (btnB) {
+        if (isBold) {
+          btnB.classList.add('active');
+        } else {
+          btnB.classList.remove('active');
+        }
+      }
+      if (btnI) {
+        if (isItalic) {
+          btnI.classList.add('active');
+        } else {
+          btnI.classList.remove('active');
+        }
+      }
+
+      if (textarea) {
+        textarea.style.fontWeight = isBold ? '700' : '400';
+        textarea.style.fontStyle = isItalic ? 'italic' : 'normal';
+      }
+    }
+
+    // Toggle Bold (B) button handler
+    function toggleBold() {
+      const fontSelect = document.getElementById('editFontFamily');
+      const boldMap = {
+        'helv': 'hebo', 'hebo': 'helv',
+        'heit': 'hebi', 'hebi': 'heit',
+        'tiro': 'tibo', 'tibo': 'tiro',
+        'tiit': 'tibi', 'tibi': 'tiit',
+        'cour': 'cobo', 'cobo': 'cour',
+        'coit': 'cobi', 'cobi': 'coit'
+      };
+      if (boldMap[fontSelect.value]) {
+        fontSelect.value = boldMap[fontSelect.value];
+        updateFormatButtonStates();
+      }
+    }
+
+    // Toggle Italic (I) button handler
+    function toggleItalic() {
+      const fontSelect = document.getElementById('editFontFamily');
+      const italicMap = {
+        'helv': 'heit', 'heit': 'helv',
+        'hebo': 'hebi', 'hebi': 'hebo',
+        'tiro': 'tiit', 'tiit': 'tiro',
+        'tibo': 'tibi', 'tibi': 'tibo',
+        'cour': 'coit', 'coit': 'cour',
+        'cobo': 'cobi', 'cobi': 'cobo'
+      };
+      if (italicMap[fontSelect.value]) {
+        fontSelect.value = italicMap[fontSelect.value];
+        updateFormatButtonStates();
+      }
+    }
+
     function closeTextEditor() {
       if (activeSpan && origSpanOrigin) {
         activeSpan.origin = [...origSpanOrigin];
@@ -879,6 +965,16 @@
       document.querySelectorAll('.text-hotspot').forEach(el => el.classList.remove('selected'));
       activeSpan = null;
       origSpanOrigin = null;
+
+      const btnB = document.getElementById('btnToggleBold');
+      const btnI = document.getElementById('btnToggleItalic');
+      if (btnB) btnB.classList.remove('active');
+      if (btnI) btnI.classList.remove('active');
+      const textarea = document.getElementById('editTextValue');
+      if (textarea) {
+        textarea.style.fontWeight = 'normal';
+        textarea.style.fontStyle = 'normal';
+      }
     }
 
     // Apply surgical text replacement
