@@ -52,20 +52,31 @@ class FontManager:
     def resolve_font_name(cls, font_str: Optional[str], flags: int = 0) -> str:
         """
         Maps arbitrary PDF font descriptors (e.g. 'ABCDEF+Helvetica-Bold', 'Calibri')
-        to the optimal standard font symbol for native PDF insertion.
+        or standard font abbreviations ('hebo', 'helv', 'tibo') to the optimal
+        standard font symbol for native PDF insertion.
         """
         if not font_str:
-            font_str = "helvetica"
+            return "helv"
+            
+        std14 = {"helv", "hebo", "heit", "hebi", "tiro", "tibo", "tiit", "tibi", "cour", "cobo", "coit", "cobi", "symb", "zadb"}
+        f_lower = font_str.lower().strip()
+        if f_lower in std14:
+            return f_lower
             
         # Strip subset prefix if present (e.g. 'BCDFEE+Calibri' -> 'Calibri')
         clean_name = re.sub(r'^[A-Z]{6}\+', '', font_str).strip()
-        lower_name = clean_name.lower().replace(" ", "").replace("-", "")
+        lower_name = clean_name.lower().replace(" ", "").replace("-", "").replace(",", "")
+        if lower_name in std14:
+            return lower_name
+            
+        if lower_name in cls.STANDARD_14_MAP:
+            return cls.STANDARD_14_MAP[lower_name]
         
-        is_bold = bool(flags & 2**4) or "bold" in lower_name
-        is_italic = bool(flags & 2**1) or "italic" in lower_name or "oblique" in lower_name
+        is_bold = bool(flags & 2**4) or any(k in lower_name for k in ["bold", "black", "heavy", "hebo", "tibo", "cobo", "hebi", "tibi", "cobi", "bd"])
+        is_italic = bool(flags & 2**1) or any(k in lower_name for k in ["italic", "oblique", "slanted", "heit", "tiit", "coit", "hebi", "tibi", "cobi"])
         
         # Check Times family
-        if any(k in lower_name for k in ["times", "georgia", "cambria", "garamond", "serif"]):
+        if any(k in lower_name for k in ["times", "georgia", "cambria", "garamond", "serif", "tiro", "tibo", "tiit", "tibi"]):
             if is_bold and is_italic:
                 return "tibi"
             elif is_bold:
@@ -75,7 +86,7 @@ class FontManager:
             return "tiro"
             
         # Check Courier / Monospace family
-        if any(k in lower_name for k in ["courier", "consolas", "mono", "sourcecode"]):
+        if any(k in lower_name for k in ["courier", "consolas", "mono", "sourcecode", "cour", "cobo", "coit", "cobi"]):
             if is_bold and is_italic:
                 return "cobi"
             elif is_bold:

@@ -926,6 +926,7 @@
     // Toggle Bold (B) button handler
     function toggleBold() {
       const fontSelect = document.getElementById('editFontFamily');
+      const val = fontSelect.value;
       const boldMap = {
         'helv': 'hebo', 'hebo': 'helv',
         'heit': 'hebi', 'hebi': 'heit',
@@ -934,15 +935,22 @@
         'cour': 'cobo', 'cobo': 'cour',
         'coit': 'cobi', 'cobi': 'coit'
       };
-      if (boldMap[fontSelect.value]) {
-        fontSelect.value = boldMap[fontSelect.value];
-        updateFormatButtonStates();
+      if (boldMap[val]) {
+        fontSelect.value = boldMap[val];
+      } else {
+        if (['hebo', 'tibo', 'cobo', 'hebi', 'tibi', 'cobi'].includes(val)) {
+          fontSelect.value = 'helv';
+        } else {
+          fontSelect.value = 'hebo';
+        }
       }
+      updateFormatButtonStates();
     }
 
     // Toggle Italic (I) button handler
     function toggleItalic() {
       const fontSelect = document.getElementById('editFontFamily');
+      const val = fontSelect.value;
       const italicMap = {
         'helv': 'heit', 'heit': 'helv',
         'hebo': 'hebi', 'hebi': 'hebo',
@@ -951,10 +959,16 @@
         'cour': 'coit', 'coit': 'cour',
         'cobo': 'cobi', 'cobi': 'cobo'
       };
-      if (italicMap[fontSelect.value]) {
-        fontSelect.value = italicMap[fontSelect.value];
-        updateFormatButtonStates();
+      if (italicMap[val]) {
+        fontSelect.value = italicMap[val];
+      } else {
+        if (['heit', 'tiit', 'coit', 'hebi', 'tibi', 'cobi'].includes(val)) {
+          fontSelect.value = 'helv';
+        } else {
+          fontSelect.value = 'heit';
+        }
       }
+      updateFormatButtonStates();
     }
 
     function closeTextEditor() {
