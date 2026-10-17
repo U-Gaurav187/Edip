@@ -28,7 +28,7 @@ async def inspect_page(doc_id: str, page_index: int):
 async def render_page(
     doc_id: str,
     page_index: int,
-    dpi: int = Query(150, ge=72, le=300, description="Rendering resolution (72 to 300 DPI)")
+    dpi: int = Query(150, ge=20, le=300, description="Rendering resolution (20 to 300 DPI)")
 ):
     """
     Renders high-fidelity rasterized view of the PDF page for web display.

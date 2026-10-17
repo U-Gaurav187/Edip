@@ -69,18 +69,27 @@ class RealPDFTextEditor:
         if origin:
             r_origin = pymupdf.Point(origin[0], origin[1])
             r_origin.transform(derotate)
-            origin_y = r_origin.y
+            # Only use origin if it matches the original text position (hasn't been moved)
+            if (r_bbox.y0 - 2.0 <= r_origin.y <= r_bbox.y1 + 5.0) and (r_bbox.x0 - 15.0 <= r_origin.x <= r_bbox.x1 + 15.0):
+                origin_y = r_origin.y
+            else:
+                origin_y = r_bbox.y1 - (r_bbox.y1 - r_bbox.y0) * 0.22
         else:
             # Estimate baseline: standard baseline is ~80% down from top
             origin_y = r_bbox.y1 - (r_bbox.y1 - r_bbox.y0) * 0.22
             
         font_size = max(origin_y - r_bbox.y0, 6.0)
         
-        # Start with safe bounding box around target ink
-        safe_x0 = r_bbox.x0
-        safe_x1 = r_bbox.x1
-        safe_y0 = max(r_bbox.y0, origin_y - 0.95 * font_size)
-        safe_y1 = min(r_bbox.y1, origin_y + min(0.25 * font_size, 4.0))
+        # Start with safe bounding box around target ink.
+        # On raster/scanned documents or pages with images, apply 1.8pt expansion
+        # to ensure every anti-aliased subpixel/speck of old ink is completely engulfed.
+        is_raster_page = len(page.get_images()) > 0
+        pad = 1.8 if is_raster_page else 0.5
+        
+        safe_x0 = max(0.0, r_bbox.x0 - pad)
+        safe_x1 = min(page.rect.width, r_bbox.x1 + pad)
+        safe_y0 = max(0.0, min(r_bbox.y0, origin_y - 0.95 * font_size) - pad)
+        safe_y1 = min(page.rect.height, max(r_bbox.y1, origin_y + min(0.30 * font_size, 5.0)) + pad)
         
         # Inspect all text spans on page to ensure zero collision with other spans
         try:
@@ -117,11 +126,11 @@ class RealPDFTextEditor:
                                 limit_y0 = s_bbox.y1 + 0.5
                                 if limit_y0 > safe_y0:
                                     safe_y0 = min(limit_y0, origin_y - 0.5)
-                        # Same line
+                        # Same line: ensure padding doesn't intrude into immediate neighbor text
                         else:
-                            if s_bbox.x1 <= r_bbox.x0 + 3.0:
+                            if s_bbox.x1 <= r_bbox.x0 + 1.0:
                                 safe_x0 = max(safe_x0, s_bbox.x1 + 0.2)
-                            elif s_bbox.x0 >= r_bbox.x1 - 3.0:
+                            elif s_bbox.x0 >= r_bbox.x1 - 1.0:
                                 safe_x1 = min(safe_x1, s_bbox.x0 - 0.2)
         except Exception:
             pass

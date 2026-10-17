@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import List, Optional
 import pymupdf
@@ -58,6 +59,22 @@ class RealPDFOCREngine:
             ocr_data = json.loads(tp.extractJSON())
         except Exception as e:
             raise RuntimeError(f"OCR execution failed: {str(e)}")
+
+        # Remove any existing invisible OCR text layer (render_mode 3) from content stream
+        # so repeat OCR scans never duplicate or pile up phantom text blocks
+        try:
+            page.clean_contents()
+            contents = page.get_contents()
+            if contents:
+                xref = contents[0]
+                stream = page.read_contents().decode('latin1', errors='ignore')
+                if "3 Tr" in stream:
+                    pattern = re.compile(r'q\s*(?:(?!q\b).)*?3\s+Tr.*?ET\s*Q\s*', re.DOTALL)
+                    cleaned_stream = pattern.sub('', stream)
+                    doc.update_stream(xref, cleaned_stream.encode('latin1'))
+                    page.clean_contents()
+        except Exception:
+            pass
 
         injected_spans = 0
         for block in ocr_data.get("blocks", []):

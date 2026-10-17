@@ -636,18 +636,18 @@
         
         <!-- Floating Text Editor Popover -->
         <div class="editor-popover" id="textEditorPopover">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div id="popoverHeader" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; cursor: move; user-select: none;">
             <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--accent);">
               Direct PDF Text Object Editor
             </div>
-            <div style="font-size: 10px; background: rgba(59, 130, 246, 0.2); color: #93c5fd; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59, 130, 246, 0.5);">
-              ✥ Drag blue box to move
+            <div style="font-size: 10px; background: rgba(59, 130, 246, 0.2); color: #93c5fd; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59, 130, 246, 0.5); cursor: move;">
+              ✥ Drag to move
             </div>
           </div>
-          <textarea id="editTextValue" placeholder="Type replacement text... (Press Enter for new line)" rows="3" style="width: 100%; margin-bottom: 10px; background: #111418; border: 1px solid var(--border-color); color: white; padding: 8px 10px; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
+          <textarea id="editTextValue" placeholder="Type replacement text... (Press Enter for new line)" rows="3" oninput="onTextEditorInputChange()" style="width: 100%; margin-bottom: 10px; background: #111418; border: 1px solid var(--border-color); color: white; padding: 8px 10px; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
           
           <div class="editor-controls-row">
-            <select id="editFontFamily" style="flex: 1; min-width: 120px; text-overflow: ellipsis;" onchange="updateFormatButtonStates()">
+            <select id="editFontFamily" style="flex: 1; min-width: 120px; text-overflow: ellipsis;" onchange="updateFormatButtonStates(); onTextEditorInputChange();">
               <option value="helv">Helvetica Regular</option>
               <option value="hebo">Helvetica Bold</option>
               <option value="heit">Helvetica Italic</option>
@@ -663,14 +663,14 @@
             </select>
             <button type="button" id="btnToggleBold" class="btn" style="padding: 4px 10px; font-weight: 800; font-size: 13px; min-width: 32px;" onclick="toggleBold()" title="Toggle Bold (B)">B</button>
             <button type="button" id="btnToggleItalic" class="btn" style="padding: 4px 10px; font-style: italic; font-size: 13px; min-width: 30px;" onclick="toggleItalic()" title="Toggle Italic (I)">I</button>
-            <input type="number" id="editFontSize" min="1" max="288" step="0.1" style="width: 58px;" title="Font Size" />
-            <input type="color" id="editFontColor" value="#000000" style="width: 32px; height: 28px; border: none; background: none; cursor: pointer;" title="Font Color" />
+            <input type="number" id="editFontSize" min="1" max="288" step="0.1" oninput="onTextEditorInputChange()" style="width: 58px;" title="Font Size" />
+            <input type="color" id="editFontColor" value="#000000" oninput="onTextEditorInputChange()" style="width: 32px; height: 28px; border: none; background: none; cursor: pointer;" title="Font Color" />
           </div>
 
           <div style="display: flex; justify-content: space-between; gap: 8px;">
             <button class="btn btn-primary" style="flex: 1;" onclick="applyTextEdit()">Apply Edit</button>
             <button class="btn" style="color: var(--danger);" onclick="deleteSelectedText()">Delete</button>
-            <button class="btn" onclick="closeTextEditor()">Cancel</button>
+            <button class="btn" onclick="closeTextEditor(true)">Cancel</button>
           </div>
         </div>
       </div>
@@ -940,10 +940,12 @@
 
             const spot = document.createElement('div');
             spot.className = "text-hotspot";
-            spot.style.left = `${x0}px`;
-            spot.style.top = `${y0}px`;
-            spot.style.width = `${w}px`;
-            spot.style.height = `${h}px`;
+            const minSpotW = Math.max(w, 14);
+            const minSpotH = Math.max(h, 12);
+            spot.style.left = `${x0 - (minSpotW > w ? (minSpotW - w) / 2 : 0)}px`;
+            spot.style.top = `${y0 - (minSpotH > h ? (minSpotH - h) / 2 : 0)}px`;
+            spot.style.width = `${minSpotW}px`;
+            spot.style.height = `${minSpotH}px`;
             spot.title = `Text: "${span.text}" | Font: ${span.font} ${span.size}pt`;
 
             let currentX = x0;
@@ -959,6 +961,11 @@
               let isDragging = false;
               let startX = e.clientX;
               let startY = e.clientY;
+              let initialLeft = parseFloat(spot.style.left) || x0;
+              let initialTop = parseFloat(spot.style.top) || y0;
+              let popover = document.getElementById('textEditorPopover');
+              let popoverInitialLeft = parseFloat(popover.style.left) || initialLeft;
+              let popoverInitialTop = parseFloat(popover.style.top) || (initialTop + h + 10);
               
               const onMouseMove = (mvEvent) => {
                 const dx = mvEvent.clientX - startX;
@@ -970,24 +977,23 @@
                 }
                 
                 if (isDragging) {
-                  currentX += dx;
-                  currentY += dy;
-                  startX = mvEvent.clientX;
-                  startY = mvEvent.clientY;
+                  const newX = initialLeft + dx;
+                  const newY = initialTop + dy;
                   
-                  spot.style.left = `${currentX}px`;
-                  spot.style.top = `${currentY}px`;
+                  spot.style.left = `${newX}px`;
+                  spot.style.top = `${newY}px`;
                   
-                  // Mutate the original span's origin so Apply Edit sends the new coordinate
-                  span.origin[0] += dx;
-                  span.origin[1] += dy;
+                  // Update span's origin by total offset from origSpanOrigin
+                  if (origSpanOrigin) {
+                    span.origin[0] = origSpanOrigin[0] + dx;
+                    span.origin[1] = origSpanOrigin[1] + dy;
+                  }
                   
-                  // Move popover along with it
-                  const popover = document.getElementById('textEditorPopover');
-                  if (popover.style.display === 'block') {
+                  // Move popover along smoothly
+                  if (popover && popover.style.display === 'block') {
                     const stageW = parseFloat(document.getElementById('pageStage').style.width) || 800;
-                    popover.style.left = `${Math.min(currentX, stageW - 360)}px`;
-                    popover.style.top = `${currentY + h + 10}px`;
+                    popover.style.left = `${Math.max(10, Math.min(popoverInitialLeft + dx, stageW - 360))}px`;
+                    popover.style.top = `${popoverInitialTop + dy}px`;
                   }
                 }
               };
@@ -1033,11 +1039,63 @@
     let origSpanFontSize = 0;
     let origSpanFontFamily = "";
     let origSpanColor = "";
+    let activeHotspotElem = null;
+
+    function onTextEditorInputChange() {
+      if (!activeSpan) return;
+
+      const newText = document.getElementById('editTextValue').value;
+      const fontVal = document.getElementById('editFontFamily').value;
+      const fontSize = parseFloat(document.getElementById('editFontSize').value) || activeSpan.size;
+      const hexColor = document.getElementById('editFontColor').value;
+
+      const isBold = ['hebo', 'hebi', 'tibo', 'tibi', 'cobo', 'cobi'].includes(fontVal);
+      const isItalic = ['heit', 'hebi', 'tiit', 'tibi', 'coit', 'cobi'].includes(fontVal);
+      const isSerif = ['tiro', 'tibo', 'tiit', 'tibi'].includes(fontVal);
+      const isMono = ['cour', 'cobo', 'coit', 'cobi'].includes(fontVal);
+
+      const fontFamily = isMono ? '"JetBrains Mono", Courier, monospace' : (isSerif ? '"Times New Roman", Times, serif' : 'Helvetica, Arial, sans-serif');
+
+      // Save to span draft state so moving/dragging NEVER loses typed text, font, bold, or size
+      activeSpan._draft = {
+        text: newText,
+        fontFamily: fontVal,
+        fontSize: fontSize,
+        color: hexColor,
+        isBold: isBold,
+        isItalic: isItalic
+      };
+
+      // Live visual preview on the page inside the hotspot so the user sees their bold/styled text!
+      if (activeHotspotElem) {
+        activeHotspotElem.innerText = newText;
+        activeHotspotElem.style.fontFamily = fontFamily;
+        activeHotspotElem.style.fontSize = `${fontSize}px`;
+        activeHotspotElem.style.fontWeight = isBold ? '700' : '400';
+        activeHotspotElem.style.fontStyle = isItalic ? 'italic' : 'normal';
+        activeHotspotElem.style.color = hexColor;
+        activeHotspotElem.style.backgroundColor = '#ffffff';
+        activeHotspotElem.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.35)';
+        activeHotspotElem.style.lineHeight = '1.1';
+        activeHotspotElem.style.overflow = 'visible';
+        activeHotspotElem.style.whiteSpace = 'pre';
+        activeHotspotElem.style.border = '2px solid var(--accent)';
+        activeHotspotElem.style.zIndex = '999';
+      }
+    }
 
     // Open text editor popover at the clicked hotspot
     function openTextEditor(span, hotspotElem) {
+      if (activeSpan === span && document.getElementById('textEditorPopover').style.display === 'block') {
+        return; // Already open for this span
+      }
+
       activeSpan = span;
-      origSpanOrigin = [...span.origin];
+      activeHotspotElem = hotspotElem;
+
+      if (!origSpanOrigin) {
+        origSpanOrigin = [...span.origin];
+      }
       origSpanText = span.text || "";
 
       // Unselect other hotspots
@@ -1045,56 +1103,73 @@
       hotspotElem.classList.add('selected');
 
       const popover = document.getElementById('textEditorPopover');
-      document.getElementById('editTextValue').value = span.text;
       
-      // Keep exact font size without excessive rounding
-      const fSize = Number(span.size).toFixed(1);
-      document.getElementById('editFontSize').value = fSize;
-      origSpanFontSize = parseFloat(fSize);
-
-      // Handle font family mapping with automatic bold and italic detection
-      const fontSelect = document.getElementById('editFontFamily');
-      const lowerFont = (span.font || "").toLowerCase();
-      const isBold = lowerFont.includes('bold') || (span.flags && (span.flags & 16) !== 0) || lowerFont.includes('hebo') || lowerFont.includes('tibo') || lowerFont.includes('cobo');
-      const isItalic = lowerFont.includes('italic') || lowerFont.includes('oblique') || (span.flags && (span.flags & 2) !== 0) || lowerFont.includes('heit') || lowerFont.includes('tiit') || lowerFont.includes('coit');
-      const isSerif = lowerFont.includes('time') || lowerFont.includes('serif');
-      const isMono = lowerFont.includes('couri') || lowerFont.includes('mono');
-
-      if (isSerif) {
-        if (isBold && isItalic) fontSelect.value = "tibi";
-        else if (isBold) fontSelect.value = "tibo";
-        else if (isItalic) fontSelect.value = "tiit";
-        else fontSelect.value = "tiro";
-      } else if (isMono) {
-        if (isBold && isItalic) fontSelect.value = "cobi";
-        else if (isBold) fontSelect.value = "cobo";
-        else if (isItalic) fontSelect.value = "coit";
-        else fontSelect.value = "cour";
+      // If a draft already exists on this span, restore it! Never overwrite user's work!
+      if (span._draft) {
+        document.getElementById('editTextValue').value = span._draft.text;
+        document.getElementById('editFontSize').value = span._draft.fontSize;
+        document.getElementById('editFontFamily').value = span._draft.fontFamily;
+        document.getElementById('editFontColor').value = span._draft.color;
+        origSpanFontSize = parseFloat(span._draft.fontSize);
+        origSpanFontFamily = span._draft.fontFamily;
+        origSpanColor = span._draft.color;
       } else {
-        if (isBold && isItalic) fontSelect.value = "hebi";
-        else if (isBold) fontSelect.value = "hebo";
-        else if (isItalic) fontSelect.value = "heit";
-        else fontSelect.value = "helv";
+        document.getElementById('editTextValue').value = span.text;
+        
+        // Keep exact font size without excessive rounding
+        const fSize = Number(span.size).toFixed(1);
+        document.getElementById('editFontSize').value = fSize;
+        origSpanFontSize = parseFloat(fSize);
+
+        // Handle font family mapping with automatic bold and italic detection
+        const fontSelect = document.getElementById('editFontFamily');
+        const lowerFont = (span.font || "").toLowerCase();
+        const isBold = lowerFont.includes('bold') || (span.flags && (span.flags & 16) !== 0) || lowerFont.includes('hebo') || lowerFont.includes('tibo') || lowerFont.includes('cobo');
+        const isItalic = lowerFont.includes('italic') || lowerFont.includes('oblique') || (span.flags && (span.flags & 2) !== 0) || lowerFont.includes('heit') || lowerFont.includes('tiit') || lowerFont.includes('coit');
+        const isSerif = lowerFont.includes('time') || lowerFont.includes('serif');
+        const isMono = lowerFont.includes('couri') || lowerFont.includes('mono');
+
+        if (isSerif) {
+          if (isBold && isItalic) fontSelect.value = "tibi";
+          else if (isBold) fontSelect.value = "tibo";
+          else if (isItalic) fontSelect.value = "tiit";
+          else fontSelect.value = "tiro";
+        } else if (isMono) {
+          if (isBold && isItalic) fontSelect.value = "cobi";
+          else if (isBold) fontSelect.value = "cobo";
+          else if (isItalic) fontSelect.value = "coit";
+          else fontSelect.value = "cour";
+        } else {
+          if (isBold && isItalic) fontSelect.value = "hebi";
+          else if (isBold) fontSelect.value = "hebo";
+          else if (isItalic) fontSelect.value = "heit";
+          else fontSelect.value = "helv";
+        }
+        origSpanFontFamily = fontSelect.value;
+
+        // Color
+        if (span.color_rgb && span.color_rgb.length === 3) {
+          const r = Math.round(span.color_rgb[0] * 255).toString(16).padStart(2, '0');
+          const g = Math.round(span.color_rgb[1] * 255).toString(16).padStart(2, '0');
+          const b = Math.round(span.color_rgb[2] * 255).toString(16).padStart(2, '0');
+          origSpanColor = `#${r}${g}${b}`;
+        } else {
+          origSpanColor = '#000000';
+        }
+        document.getElementById('editFontColor').value = origSpanColor;
       }
-      origSpanFontFamily = fontSelect.value;
+
       updateFormatButtonStates();
-
-      // Color
-      if (span.color_rgb && span.color_rgb.length === 3) {
-        const r = Math.round(span.color_rgb[0] * 255).toString(16).padStart(2, '0');
-        const g = Math.round(span.color_rgb[1] * 255).toString(16).padStart(2, '0');
-        const b = Math.round(span.color_rgb[2] * 255).toString(16).padStart(2, '0');
-        origSpanColor = `#${r}${g}${b}`;
-      } else {
-        origSpanColor = '#000000';
-      }
-      document.getElementById('editFontColor').value = origSpanColor;
+      onTextEditorInputChange();
 
       // Position popover
-      const [x0, y0, x1, y1] = span.bbox;
+      const currentSpotX = parseFloat(hotspotElem.style.left) || span.bbox[0];
+      const currentSpotY = parseFloat(hotspotElem.style.top) || span.bbox[1];
+      const currentSpotH = parseFloat(hotspotElem.style.height) || (span.bbox[3] - span.bbox[1]);
       const stageW = parseFloat(document.getElementById('pageStage').style.width) || 800;
-      popover.style.left = `${Math.min(x0, stageW - 360)}px`;
-      popover.style.top = `${y1 + 10}px`;
+
+      popover.style.left = `${Math.max(10, Math.min(currentSpotX, stageW - 360))}px`;
+      popover.style.top = `${currentSpotY + currentSpotH + 10}px`;
       popover.style.display = 'block';
       document.getElementById('editTextValue').focus();
     }
@@ -1153,6 +1228,7 @@
         }
       }
       updateFormatButtonStates();
+      onTextEditorInputChange();
     }
 
     // Toggle Italic (I) button handler
@@ -1177,15 +1253,32 @@
         }
       }
       updateFormatButtonStates();
+      onTextEditorInputChange();
     }
 
-    function closeTextEditor() {
-      if (activeSpan && origSpanOrigin) {
+    function closeTextEditor(isCancel = false) {
+      if (isCancel && activeSpan && origSpanOrigin) {
         activeSpan.origin = [...origSpanOrigin];
+        if (activeHotspotElem) {
+          activeHotspotElem.style.left = `${activeSpan.bbox[0]}px`;
+          activeHotspotElem.style.top = `${activeSpan.bbox[1]}px`;
+          activeHotspotElem.innerText = '';
+          activeHotspotElem.style.background = 'transparent';
+          activeHotspotElem.style.boxShadow = 'none';
+          activeHotspotElem.style.border = '1px dashed transparent';
+        }
+        if (activeSpan) activeSpan._draft = null;
+      } else if (activeHotspotElem && !activeSpan?._draft) {
+        activeHotspotElem.innerText = '';
+        activeHotspotElem.style.background = 'transparent';
+        activeHotspotElem.style.boxShadow = 'none';
+        activeHotspotElem.style.border = '1px dashed transparent';
       }
+
       document.getElementById('textEditorPopover').style.display = 'none';
       document.querySelectorAll('.text-hotspot').forEach(el => el.classList.remove('selected'));
       activeSpan = null;
+      activeHotspotElem = null;
       origSpanOrigin = null;
 
       const btnB = document.getElementById('btnToggleBold');
@@ -1288,20 +1381,68 @@
       if (e.key === 'Escape') {
         const popover = document.getElementById('textEditorPopover');
         if (popover && popover.style.display === 'block') {
-          closeTextEditor();
+          closeTextEditor(true);
         }
       }
     });
 
-    // Close popover when clicking anywhere outside of popover and hotspots
+    // Close popover when clicking anywhere outside of popover and hotspots ONLY if no unsaved work
     document.addEventListener('mousedown', (e) => {
       const popover = document.getElementById('textEditorPopover');
       if (popover && popover.style.display === 'block') {
         if (!popover.contains(e.target) && !e.target.closest('.text-hotspot') && !e.target.closest('.image-hotspot')) {
-          closeTextEditor();
+          const hasDraft = activeSpan && activeSpan._draft;
+          const originMoved = activeSpan && origSpanOrigin && (Math.abs(activeSpan.origin[0] - origSpanOrigin[0]) > 1 || Math.abs(activeSpan.origin[1] - origSpanOrigin[1]) > 1);
+          if (!hasDraft && !originMoved) {
+            closeTextEditor(false);
+          }
         }
       }
     });
+
+    function setupPopoverDrag() {
+      const header = document.getElementById('popoverHeader');
+      const popover = document.getElementById('textEditorPopover');
+      if (!header || !popover) return;
+
+      header.addEventListener('mousedown', (e) => {
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        let startX = e.clientX;
+        let startY = e.clientY;
+        let initPopLeft = parseFloat(popover.style.left) || 0;
+        let initPopTop = parseFloat(popover.style.top) || 0;
+        let initSpotLeft = activeHotspotElem ? (parseFloat(activeHotspotElem.style.left) || 0) : 0;
+        let initSpotTop = activeHotspotElem ? (parseFloat(activeHotspotElem.style.top) || 0) : 0;
+
+        const onMove = (ev) => {
+          const dx = ev.clientX - startX;
+          const dy = ev.clientY - startY;
+
+          popover.style.left = `${initPopLeft + dx}px`;
+          popover.style.top = `${initPopTop + dy}px`;
+
+          if (activeHotspotElem && activeSpan) {
+            activeHotspotElem.style.left = `${initSpotLeft + dx}px`;
+            activeHotspotElem.style.top = `${initSpotTop + dy}px`;
+            if (origSpanOrigin) {
+              activeSpan.origin[0] = origSpanOrigin[0] + dx;
+              activeSpan.origin[1] = origSpanOrigin[1] + dy;
+            }
+          }
+        };
+
+        const onUp = () => {
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+        };
+
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+    }
 
     // Delete image
     async function deleteImage(xref) {
@@ -1864,6 +2005,7 @@
     // Initialize interactions
     setupImagePlacementInteractions();
     setupCropBoxInteractions();
+    setupPopoverDrag();
   </script>
 </body>
 </html>
