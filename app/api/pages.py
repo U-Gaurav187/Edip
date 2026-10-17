@@ -35,7 +35,15 @@ async def render_page(
     """
     try:
         png_bytes = engine_manager.render_page_image(doc_id, page_index, dpi=dpi)
-        return Response(content=png_bytes, media_type="image/png")
+        return Response(
+            content=png_bytes,
+            media_type="image/png",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
     except KeyError:
         raise HTTPException(status_code=404, detail="Document not found.")
     except ValueError as e:
