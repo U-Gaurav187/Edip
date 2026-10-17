@@ -47,3 +47,27 @@ def test_image_deletion():
     for c_xref in page.get_contents():
         stream_text = doc.xref_stream(c_xref).decode("latin1", errors="ignore")
         assert "Do" not in stream_text
+
+def test_image_insertion():
+    doc = pymupdf.open()
+    page = doc.new_page(width=500, height=500)
+    assert len(page.get_images()) == 0
+    
+    img = Image.new("RGB", (80, 80), color="green")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    
+    success = RealPDFImageEditor.insert_image(
+        doc=doc,
+        page_index=0,
+        image_bytes=buf.getvalue(),
+        bbox=[100, 100, 200, 200]
+    )
+    assert success is True
+    assert len(page.get_images()) == 1
+    
+    # Verify image info
+    info = page.get_image_info(xrefs=True)
+    assert len(info) == 1
+    assert round(info[0]["bbox"][0]) == 100
+    assert round(info[0]["bbox"][1]) == 100

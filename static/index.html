@@ -405,10 +405,150 @@
       z-index: 1000;
     }
 
-    #toast.show {
-      opacity: 1;
+    /* Image Placement & Resizing Box */
+    .image-placement-box {
+      position: absolute;
+      border: 2px dashed #3b82f6;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+      cursor: move;
+      touch-action: none;
+      z-index: 50;
+      user-select: none;
+    }
+
+    .image-placement-box img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      pointer-events: none;
+      -webkit-user-drag: none;
+    }
+
+    .resize-handle {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: #3b82f6;
+      border: 1.5px solid #ffffff;
+      border-radius: 2px;
+      box-sizing: border-box;
+      z-index: 52;
+    }
+
+    .handle-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+    .handle-n  { top: -6px; left: calc(50% - 5px); cursor: ns-resize; }
+    .handle-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+    .handle-e  { top: calc(50% - 5px); right: -6px; cursor: ew-resize; }
+    .handle-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+    .handle-s  { bottom: -6px; left: calc(50% - 5px); cursor: ns-resize; }
+    .handle-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+    .handle-w  { top: calc(50% - 5px); left: -6px; cursor: ew-resize; }
+
+    .placement-toolbar {
+      position: absolute;
+      bottom: -46px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      background: #1a1d23;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 4px 8px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+      white-space: nowrap;
+      z-index: 55;
       pointer-events: auto;
     }
+
+    /* Crop Modal */
+    .crop-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.82);
+      backdrop-filter: blur(4px);
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .crop-dialog {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      max-width: 90vw;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.85);
+      overflow: hidden;
+    }
+
+    .crop-header {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #16191f;
+    }
+
+    .crop-body {
+      padding: 24px;
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #0d0f12;
+      user-select: none;
+    }
+
+    .crop-footer {
+      padding: 12px 18px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #16191f;
+    }
+
+    .crop-canvas-wrapper {
+      position: relative;
+      display: inline-block;
+      overflow: hidden;
+      line-height: 0;
+    }
+
+    .crop-selection-box {
+      position: absolute;
+      border: 2px dashed #ffffff;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65);
+      cursor: move;
+      box-sizing: border-box;
+      touch-action: none;
+    }
+
+    .crop-handle {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background: #3b82f6;
+      border: 2px solid #ffffff;
+      border-radius: 2px;
+      box-sizing: border-box;
+    }
+
+    .crop-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+    .crop-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+    .crop-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+    .crop-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
   </style>
 </head>
 <body>
@@ -432,6 +572,11 @@
 
       <button class="btn" onclick="rotateCurrentPage(90)">↻ Rotate 90°</button>
       
+      <div style="width: 1px; height: 24px; background: var(--border-color); margin: 0 4px;"></div>
+
+      <button class="btn" onclick="triggerAddImage()">🖼️ Add Image</button>
+      <input type="file" id="imagePlacementInput" accept="image/png,image/jpeg,image/webp,image/gif" style="display: none;" onchange="handleImageSelectedForPlacement(event)">
+
       <div style="width: 1px; height: 24px; background: var(--border-color); margin: 0 4px;"></div>
 
       <button class="btn btn-success" onclick="exportPDF('pdf')">💾 Export Clean PDF</button>
@@ -469,6 +614,25 @@
       <div class="page-stage" id="pageStage" style="display: none;">
         <img id="pageCanvasImg" alt="PDF Rendered Page" />
         <div class="overlay-layer" id="overlayLayer"></div>
+
+        <!-- Interactive Image Placement & Resize Box -->
+        <div id="imagePlacementBox" class="image-placement-box" style="display: none;">
+          <img id="placementImg" alt="Image to place" />
+          <div class="resize-handle handle-nw" data-dir="nw"></div>
+          <div class="resize-handle handle-n" data-dir="n"></div>
+          <div class="resize-handle handle-ne" data-dir="ne"></div>
+          <div class="resize-handle handle-e" data-dir="e"></div>
+          <div class="resize-handle handle-se" data-dir="se"></div>
+          <div class="resize-handle handle-s" data-dir="s"></div>
+          <div class="resize-handle handle-sw" data-dir="sw"></div>
+          <div class="resize-handle handle-w" data-dir="w"></div>
+          
+          <div class="placement-toolbar">
+            <button type="button" class="btn" style="padding: 4px 10px; font-size: 12px;" onclick="openCropModal()">✂️ Crop</button>
+            <button type="button" class="btn btn-success" style="padding: 4px 10px; font-size: 12px;" onclick="applyImagePlacement()">✓ Add to PDF</button>
+            <button type="button" class="btn" style="padding: 4px 10px; font-size: 12px; color: var(--danger);" onclick="cancelImagePlacement()">Cancel</button>
+          </div>
+        </div>
         
         <!-- Floating Text Editor Popover -->
         <div class="editor-popover" id="textEditorPopover">
@@ -552,6 +716,40 @@
 
   </div>
 
+  <!-- Image Crop Modal -->
+  <div id="cropModal" class="crop-modal-overlay">
+    <div class="crop-dialog">
+      <div class="crop-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:16px;">✂️</span>
+          <span style="font-weight:700;">Crop Image</span>
+        </div>
+        <button class="btn" onclick="closeCropModal()" style="padding:4px 8px;">✕</button>
+      </div>
+      <div class="crop-body" id="cropBody">
+        <div id="cropCanvasWrapper" class="crop-canvas-wrapper">
+          <canvas id="cropCanvas"></canvas>
+          <div id="cropBox" class="crop-selection-box">
+            <div class="crop-handle crop-nw" data-handle="nw"></div>
+            <div class="crop-handle crop-ne" data-handle="ne"></div>
+            <div class="crop-handle crop-se" data-handle="se"></div>
+            <div class="crop-handle crop-sw" data-handle="sw"></div>
+          </div>
+        </div>
+      </div>
+      <div class="crop-footer">
+        <div style="font-size:12px; color:var(--text-muted);">
+          Drag crop box to reposition &bull; Drag corners to resize
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" onclick="resetCropSelection()">Reset Full</button>
+          <button class="btn" onclick="closeCropModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="confirmCrop()">Apply Crop</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast">Notification</div>
 
   <script>
@@ -561,6 +759,15 @@
     let currentPageIndex = 0;
     let activeSpan = null;
     let scaleFactor = 1.0;
+
+    // Image Placement & Crop State
+    let currentPlacementBlob = null;
+    let currentPlacementFile = null;
+    let originalPlacementImage = null;
+    let placementAspectRatio = 1.0;
+    let activeCropImage = null;
+    let cropCanvasW = 0;
+    let cropCanvasH = 0;
 
     // Toast notification
     function showToast(msg) {
@@ -678,6 +885,7 @@
     // Load active page display & interactive overlay
     async function loadCurrentPage() {
       closeTextEditor();
+      cancelImagePlacement();
       document.getElementById('pageCounter').innerText = `Page ${currentPageIndex + 1} / ${documentData.page_count}`;
 
       // 1. Fetch Page Inspection Data
@@ -1161,6 +1369,501 @@
       window.open(`/api/documents/${currentDocId}/export?format=${format}&clean_streams=true&deflate=true`, '_blank');
       showToast(`Exporting clean ${format.toUpperCase()}...`);
     }
+
+    // ==========================================
+    // Interactive Image Insertion & Cropping
+    // ==========================================
+
+    function triggerAddImage() {
+      if (!currentDocId) {
+        showToast("Please open a PDF document first.");
+        return;
+      }
+      document.getElementById('imagePlacementInput').click();
+    }
+
+    function handleImageSelectedForPlacement(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file (PNG, JPEG, WebP, etc.)');
+        event.target.value = '';
+        return;
+      }
+
+      currentPlacementFile = file;
+      currentPlacementBlob = file;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          originalPlacementImage = img;
+          placementAspectRatio = img.naturalWidth / img.naturalHeight;
+
+          const stage = document.getElementById('pageStage');
+          const stageW = parseFloat(stage.style.width) || 612;
+          const stageH = parseFloat(stage.style.height) || 792;
+
+          let initW = Math.min(240, stageW * 0.45);
+          let initH = initW / placementAspectRatio;
+
+          if (initH > stageH * 0.6) {
+            initH = stageH * 0.6;
+            initW = initH * placementAspectRatio;
+          }
+
+          const initX = Math.max(10, (stageW - initW) / 2);
+          const initY = Math.max(10, (stageH - initH) / 2);
+
+          const placementBox = document.getElementById('imagePlacementBox');
+          const placementImg = document.getElementById('placementImg');
+          
+          placementImg.src = e.target.result;
+          placementBox.style.width = `${initW}px`;
+          placementBox.style.height = `${initH}px`;
+          placementBox.style.left = `${initX}px`;
+          placementBox.style.top = `${initY}px`;
+          placementBox.style.display = 'block';
+
+          placementBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          showToast('Image loaded. Drag to move, handles to resize, or click Crop.');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
+
+    function cancelImagePlacement() {
+      const box = document.getElementById('imagePlacementBox');
+      if (box) box.style.display = 'none';
+      currentPlacementBlob = null;
+      currentPlacementFile = null;
+      originalPlacementImage = null;
+    }
+
+    async function applyImagePlacement() {
+      if (!currentDocId || !currentPlacementBlob) return;
+
+      const box = document.getElementById('imagePlacementBox');
+      const x0 = parseFloat(box.style.left) || 0;
+      const y0 = parseFloat(box.style.top) || 0;
+      const w = parseFloat(box.style.width) || 100;
+      const h = parseFloat(box.style.height) || 100;
+      const x1 = x0 + w;
+      const y1 = y0 + h;
+
+      showToast('Inserting native PDF Image XObject...');
+
+      const formData = new FormData();
+      formData.append('page_index', currentPageIndex);
+      formData.append('x0', x0.toFixed(2));
+      formData.append('y0', y0.toFixed(2));
+      formData.append('x1', x1.toFixed(2));
+      formData.append('y1', y1.toFixed(2));
+      formData.append('rotation_degrees', 0.0);
+      formData.append('file', currentPlacementBlob, 'placed_image.png');
+
+      try {
+        const resp = await fetch(`/api/documents/${currentDocId}/images/insert`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.detail || 'Image insertion failed');
+        }
+
+        cancelImagePlacement();
+        showToast('Image inserted successfully into PDF page!');
+        await loadCurrentPage();
+      } catch (err) {
+        alert('Error inserting image: ' + err.message);
+      }
+    }
+
+    function setupImagePlacementInteractions() {
+      const box = document.getElementById('imagePlacementBox');
+      if (!box) return;
+
+      let isDraggingBox = false;
+      let isResizing = false;
+      let resizeDir = '';
+      let startX = 0, startY = 0;
+      let initLeft = 0, initTop = 0, initW = 0, initH = 0;
+
+      box.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.resize-handle') || e.target.closest('.placement-toolbar')) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+
+        isDraggingBox = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        initLeft = parseFloat(box.style.left) || 0;
+        initTop = parseFloat(box.style.top) || 0;
+        initW = parseFloat(box.style.width) || 100;
+        initH = parseFloat(box.style.height) || 100;
+        try { box.setPointerCapture(e.pointerId); } catch (_) {}
+
+        const onPointerMove = (ev) => {
+          if (!isDraggingBox) return;
+          const dx = ev.clientX - startX;
+          const dy = ev.clientY - startY;
+
+          const stage = document.getElementById('pageStage');
+          const maxW = parseFloat(stage.style.width) || 1000;
+          const maxH = parseFloat(stage.style.height) || 1000;
+
+          let newLeft = Math.max(0, Math.min(initLeft + dx, maxW - initW));
+          let newTop = Math.max(0, Math.min(initTop + dy, maxH - initH));
+
+          box.style.left = `${newLeft}px`;
+          box.style.top = `${newTop}px`;
+        };
+
+        const onPointerUp = (ev) => {
+          isDraggingBox = false;
+          try { box.releasePointerCapture(ev.pointerId); } catch (_) {}
+          window.removeEventListener('pointermove', onPointerMove);
+          window.removeEventListener('pointerup', onPointerUp);
+        };
+
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+      });
+
+      const handles = box.querySelectorAll('.resize-handle');
+      handles.forEach(handle => {
+        handle.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          isResizing = true;
+          resizeDir = handle.getAttribute('data-dir');
+          startX = e.clientX;
+          startY = e.clientY;
+          initLeft = parseFloat(box.style.left) || 0;
+          initTop = parseFloat(box.style.top) || 0;
+          initW = parseFloat(box.style.width) || 100;
+          initH = parseFloat(box.style.height) || 100;
+          try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+
+          const onPointerMove = (ev) => {
+            if (!isResizing) return;
+            const dx = ev.clientX - startX;
+            const dy = ev.clientY - startY;
+
+            let curW = initW;
+            let curH = initH;
+            let curLeft = initLeft;
+            let curTop = initTop;
+
+            const stage = document.getElementById('pageStage');
+            const maxStageW = parseFloat(stage.style.width) || 1000;
+            const maxStageH = parseFloat(stage.style.height) || 1000;
+
+            if (resizeDir === 'se') {
+              curW = Math.max(25, initW + dx);
+              curH = curW / placementAspectRatio;
+            } else if (resizeDir === 'sw') {
+              curW = Math.max(25, initW - dx);
+              curH = curW / placementAspectRatio;
+              curLeft = initLeft + (initW - curW);
+            } else if (resizeDir === 'ne') {
+              curW = Math.max(25, initW + dx);
+              curH = curW / placementAspectRatio;
+              curTop = initTop + (initH - curH);
+            } else if (resizeDir === 'nw') {
+              curW = Math.max(25, initW - dx);
+              curH = curW / placementAspectRatio;
+              curLeft = initLeft + (initW - curW);
+              curTop = initTop + (initH - curH);
+            } else if (resizeDir === 'e') {
+              curW = Math.max(25, initW + dx);
+            } else if (resizeDir === 'w') {
+              curW = Math.max(25, initW - dx);
+              curLeft = initLeft + (initW - curW);
+            } else if (resizeDir === 's') {
+              curH = Math.max(25, initH + dy);
+            } else if (resizeDir === 'n') {
+              curH = Math.max(25, initH - dy);
+              curTop = initTop + (initH - curH);
+            }
+
+            if (curLeft < 0) {
+              curW += curLeft;
+              curLeft = 0;
+            }
+            if (curTop < 0) {
+              curH += curTop;
+              curTop = 0;
+            }
+            if (curLeft + curW > maxStageW) curW = maxStageW - curLeft;
+            if (curTop + curH > maxStageH) curH = maxStageH - curTop;
+
+            box.style.width = `${curW}px`;
+            box.style.height = `${curH}px`;
+            box.style.left = `${curLeft}px`;
+            box.style.top = `${curTop}px`;
+          };
+
+          const onPointerUp = (ev) => {
+            isResizing = false;
+            try { handle.releasePointerCapture(ev.pointerId); } catch (_) {}
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerUp);
+          };
+
+          window.addEventListener('pointermove', onPointerMove);
+          window.addEventListener('pointerup', onPointerUp);
+        });
+      });
+    }
+
+    // Crop Modal Functions
+    function openCropModal() {
+      if (!currentPlacementBlob) return;
+
+      const cropModal = document.getElementById('cropModal');
+      const cropCanvas = document.getElementById('cropCanvas');
+      const cropBox = document.getElementById('cropBox');
+
+      const img = new Image();
+      img.onload = () => {
+        activeCropImage = img;
+
+        const maxViewW = Math.min(window.innerWidth * 0.75, 680);
+        const maxViewH = Math.min(window.innerHeight * 0.65, 480);
+
+        let displayW = img.naturalWidth;
+        let displayH = img.naturalHeight;
+
+        const scale = Math.min(maxViewW / displayW, maxViewH / displayH, 1.0);
+        displayW = Math.round(displayW * scale);
+        displayH = Math.round(displayH * scale);
+
+        cropCanvasW = displayW;
+        cropCanvasH = displayH;
+
+        cropCanvas.width = displayW;
+        cropCanvas.height = displayH;
+        cropCanvas.style.width = `${displayW}px`;
+        cropCanvas.style.height = `${displayH}px`;
+
+        const ctx = cropCanvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, displayW, displayH);
+
+        const initialCropW = Math.round(displayW * 0.85);
+        const initialCropH = Math.round(displayH * 0.85);
+        const initialCropX = Math.round((displayW - initialCropW) / 2);
+        const initialCropY = Math.round((displayH - initialCropH) / 2);
+
+        cropBox.style.left = `${initialCropX}px`;
+        cropBox.style.top = `${initialCropY}px`;
+        cropBox.style.width = `${initialCropW}px`;
+        cropBox.style.height = `${initialCropH}px`;
+
+        cropModal.style.display = 'flex';
+      };
+
+      if (currentPlacementBlob instanceof Blob) {
+        img.src = URL.createObjectURL(currentPlacementBlob);
+      } else if (originalPlacementImage) {
+        img.src = originalPlacementImage.src;
+      }
+    }
+
+    function closeCropModal() {
+      document.getElementById('cropModal').style.display = 'none';
+    }
+
+    function resetCropSelection() {
+      const cropBox = document.getElementById('cropBox');
+      cropBox.style.left = '0px';
+      cropBox.style.top = '0px';
+      cropBox.style.width = `${cropCanvasW}px`;
+      cropBox.style.height = `${cropCanvasH}px`;
+    }
+
+    function confirmCrop() {
+      if (!activeCropImage || cropCanvasW === 0 || cropCanvasH === 0) return;
+
+      const cropBox = document.getElementById('cropBox');
+      const cropLeft = parseFloat(cropBox.style.left) || 0;
+      const cropTop = parseFloat(cropBox.style.top) || 0;
+      const cropW = parseFloat(cropBox.style.width) || cropCanvasW;
+      const cropH = parseFloat(cropBox.style.height) || cropCanvasH;
+
+      const scaleX = activeCropImage.naturalWidth / cropCanvasW;
+      const scaleY = activeCropImage.naturalHeight / cropCanvasH;
+
+      const sx = Math.max(0, cropLeft * scaleX);
+      const sy = Math.max(0, cropTop * scaleY);
+      const sw = Math.min(activeCropImage.naturalWidth - sx, cropW * scaleX);
+      const sh = Math.min(activeCropImage.naturalHeight - sy, cropH * scaleY);
+
+      if (sw < 5 || sh < 5) {
+        alert("Crop area is too small.");
+        return;
+      }
+
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = Math.round(sw);
+      offCanvas.height = Math.round(sh);
+      const offCtx = offCanvas.getContext('2d');
+      offCtx.drawImage(activeCropImage, sx, sy, sw, sh, 0, 0, offCanvas.width, offCanvas.height);
+
+      offCanvas.toBlob((blob) => {
+        if (!blob) return;
+        currentPlacementBlob = blob;
+
+        const newUrl = URL.createObjectURL(blob);
+        const placementImg = document.getElementById('placementImg');
+        const placementBox = document.getElementById('imagePlacementBox');
+        
+        placementImg.src = newUrl;
+
+        const curW = parseFloat(placementBox.style.width) || 200;
+        placementAspectRatio = offCanvas.width / offCanvas.height;
+        const newH = curW / placementAspectRatio;
+        placementBox.style.height = `${newH}px`;
+
+        closeCropModal();
+        showToast('Image cropped! You can resize or click "✓ Add to PDF".');
+      }, 'image/png');
+    }
+
+    function setupCropBoxInteractions() {
+      const cropBox = document.getElementById('cropBox');
+      if (!cropBox) return;
+
+      let isMoving = false;
+      let isResizing = false;
+      let handleDir = '';
+      let startX = 0, startY = 0;
+      let initLeft = 0, initTop = 0, initW = 0, initH = 0;
+
+      cropBox.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.crop-handle')) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        isMoving = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        initLeft = parseFloat(cropBox.style.left) || 0;
+        initTop = parseFloat(cropBox.style.top) || 0;
+        initW = parseFloat(cropBox.style.width) || cropCanvasW;
+        initH = parseFloat(cropBox.style.height) || cropCanvasH;
+        try { cropBox.setPointerCapture(e.pointerId); } catch (_) {}
+
+        const onMove = (ev) => {
+          if (!isMoving) return;
+          const dx = ev.clientX - startX;
+          const dy = ev.clientY - startY;
+
+          let newLeft = Math.max(0, Math.min(initLeft + dx, cropCanvasW - initW));
+          let newTop = Math.max(0, Math.min(initTop + dy, cropCanvasH - initH));
+
+          cropBox.style.left = `${newLeft}px`;
+          cropBox.style.top = `${newTop}px`;
+        };
+
+        const onUp = (ev) => {
+          isMoving = false;
+          try { cropBox.releasePointerCapture(ev.pointerId); } catch (_) {}
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+        };
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+      });
+
+      const handles = cropBox.querySelectorAll('.crop-handle');
+      handles.forEach(h => {
+        h.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          isResizing = true;
+          handleDir = h.getAttribute('data-handle');
+          startX = e.clientX;
+          startY = e.clientY;
+          initLeft = parseFloat(cropBox.style.left) || 0;
+          initTop = parseFloat(cropBox.style.top) || 0;
+          initW = parseFloat(cropBox.style.width) || cropCanvasW;
+          initH = parseFloat(cropBox.style.height) || cropCanvasH;
+          try { h.setPointerCapture(e.pointerId); } catch (_) {}
+
+          const onMove = (ev) => {
+            if (!isResizing) return;
+            const dx = ev.clientX - startX;
+            const dy = ev.clientY - startY;
+
+            let curL = initLeft;
+            let curT = initTop;
+            let curW = initW;
+            let curH = initH;
+
+            if (handleDir === 'se') {
+              curW = Math.max(20, Math.min(initW + dx, cropCanvasW - initLeft));
+              curH = Math.max(20, Math.min(initH + dy, cropCanvasH - initTop));
+            } else if (handleDir === 'sw') {
+              curW = Math.max(20, initW - dx);
+              if (initLeft + (initW - curW) < 0) {
+                curW = initLeft + initW;
+              }
+              curL = initLeft + (initW - curW);
+              curH = Math.max(20, Math.min(initH + dy, cropCanvasH - initTop));
+            } else if (handleDir === 'ne') {
+              curW = Math.max(20, Math.min(initW + dx, cropCanvasW - initLeft));
+              curH = Math.max(20, initH - dy);
+              if (initTop + (initH - curH) < 0) {
+                curH = initTop + initH;
+              }
+              curT = initTop + (initH - curH);
+            } else if (handleDir === 'nw') {
+              curW = Math.max(20, initW - dx);
+              if (initLeft + (initW - curW) < 0) {
+                curW = initLeft + initW;
+              }
+              curL = initLeft + (initW - curW);
+              curH = Math.max(20, initH - dy);
+              if (initTop + (initH - curH) < 0) {
+                curH = initTop + initH;
+              }
+              curT = initTop + (initH - curH);
+            }
+
+            cropBox.style.left = `${curL}px`;
+            cropBox.style.top = `${curT}px`;
+            cropBox.style.width = `${curW}px`;
+            cropBox.style.height = `${curH}px`;
+          };
+
+          const onUp = (ev) => {
+            isResizing = false;
+            try { h.releasePointerCapture(ev.pointerId); } catch (_) {}
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+          };
+
+          window.addEventListener('pointermove', onMove);
+          window.addEventListener('pointerup', onUp);
+        });
+      });
+    }
+
+    // Initialize interactions
+    setupImagePlacementInteractions();
+    setupCropBoxInteractions();
   </script>
 </body>
 </html>

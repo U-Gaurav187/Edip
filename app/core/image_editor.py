@@ -176,3 +176,36 @@ class RealPDFImageEditor:
             fmt = pil_img.format if pil_img.format else "PNG"
             cropped.save(buf, format=fmt)
             return cls.replace_image(doc, page_index, xref, buf.getvalue())
+
+    @classmethod
+    def insert_image(
+        cls,
+        doc: pymupdf.Document,
+        page_index: int,
+        image_bytes: bytes,
+        bbox: List[float],
+        rotation_degrees: float = 0.0
+    ) -> bool:
+        """
+        Inserts a new image XObject into the page's /Contents stream at the specified bbox [x0, y0, x1, y1].
+        Properly transforms coordinates respecting page rotation.
+        """
+        if page_index < 0 or page_index >= len(doc):
+            raise ValueError(f"Page index {page_index} out of bounds")
+            
+        page = doc[page_index]
+        derotate = ~page.rotation_matrix
+        r_rect = pymupdf.Rect(bbox) * derotate
+        r_rect.normalize()
+        
+        if r_rect.width <= 0 or r_rect.height <= 0:
+            raise ValueError("Invalid target bounding box for image insertion")
+            
+        page.insert_image(
+            r_rect,
+            stream=image_bytes,
+            rotate=int(page.rotation + rotation_degrees) % 360,
+            overlay=True
+        )
+        page.clean_contents()
+        return True
