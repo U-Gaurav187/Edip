@@ -549,6 +549,35 @@
     .crop-ne { top: -6px; right: -6px; cursor: nesw-resize; }
     .crop-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
     .crop-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+
+    /* Scanned Document Alert Banner */
+    .scanned-banner {
+      width: calc(100% - 32px);
+      max-width: 860px;
+      margin: 12px auto 0 auto;
+      background: linear-gradient(90deg, #1e293b, #0f172a);
+      border: 1px solid #3b82f6;
+      border-radius: 8px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+      z-index: 50;
+      flex-shrink: 0;
+    }
+
+    .scanned-banner-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .page-stage.mode-add-text,
+    .page-stage.mode-add-text .overlay-layer {
+      cursor: crosshair !important;
+    }
   </style>
 </head>
 <body>
@@ -574,6 +603,8 @@
       
       <div style="width: 1px; height: 24px; background: var(--border-color); margin: 0 4px;"></div>
 
+      <button class="btn" id="btnAddText" onclick="toggleAddTextMode()" title="Click anywhere on the document to add new text">🔤 Add Text</button>
+      <button class="btn" id="btnOCR" onclick="runOCR()" title="Run MuPDF/Tesseract OCR to detect text and make scanned documents editable">⚡ OCR Text</button>
       <button class="btn" onclick="triggerAddImage()">🖼️ Add Image</button>
       <input type="file" id="imagePlacementInput" accept="image/png,image/jpeg,image/webp,image/gif" style="display: none;" onchange="handleImageSelectedForPlacement(event)">
 
@@ -584,8 +615,8 @@
     </div>
 
     <div>
-      <input type="file" id="fileInput" accept="application/pdf" style="display: none;" onchange="handleFileSelected(event)">
-      <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Upload PDF</button>
+      <input type="file" id="fileInput" accept="application/pdf,image/png,image/jpeg,image/webp,image/bmp" style="display: none;" onchange="handleFileSelected(event)">
+      <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Upload PDF / Photo</button>
     </div>
   </header>
 
@@ -603,11 +634,26 @@
       <div class="empty-state" id="emptyState">
         <div class="upload-box" onclick="document.getElementById('fileInput').click()">
           <div class="upload-icon">📄</div>
-          <h2 style="margin-bottom: 8px;">Open a PDF to Edit</h2>
+          <h2 style="margin-bottom: 8px;">Open a PDF or Document Photo to Edit</h2>
           <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
-            Real ISO 32000-1 PDF object editing. No white rectangle overlays. No image hacks.
+            Real ISO 32000-1 PDF object editing. Supports native digital PDFs, scanned documents, and photos.
           </p>
-          <button class="btn btn-primary">Browse PDF File</button>
+          <button class="btn btn-primary">Browse File (PDF / Image)</button>
+        </div>
+      </div>
+
+      <!-- Smart Scanned Document Banner -->
+      <div id="scannedAlertBanner" class="scanned-banner" style="display: none;">
+        <div class="scanned-banner-content">
+          <span style="font-size: 20px;">⚡</span>
+          <div>
+            <div style="font-weight: 600; font-size: 13px;">Scanned / Photo Page Detected</div>
+            <div style="font-size: 12px; opacity: 0.85;">This page has no vector text yet. Run OCR to make all printed words clickable, selectable, and editable.</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button class="btn btn-primary" id="bannerOcrBtn" onclick="runOCR()" style="font-size: 12px; padding: 5px 12px;">Run OCR to Edit</button>
+          <button class="btn" onclick="dismissScannedBanner()" style="padding: 4px 8px; font-size: 12px;" title="Dismiss">✕</button>
         </div>
       </div>
 
@@ -637,14 +683,14 @@
         <!-- Floating Text Editor Popover -->
         <div class="editor-popover" id="textEditorPopover">
           <div id="popoverHeader" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; cursor: move; user-select: none;">
-            <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--accent);">
+            <div id="popoverTitle" style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--accent);">
               Direct PDF Text Object Editor
             </div>
             <div style="font-size: 10px; background: rgba(59, 130, 246, 0.2); color: #93c5fd; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59, 130, 246, 0.5); cursor: move;">
               ✥ Drag to move
             </div>
           </div>
-          <textarea id="editTextValue" placeholder="Type replacement text... (Press Enter for new line)" rows="3" oninput="onTextEditorInputChange()" style="width: 100%; margin-bottom: 10px; background: #111418; border: 1px solid var(--border-color); color: white; padding: 8px 10px; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
+          <textarea id="editTextValue" placeholder="Type text... (Press Enter for new line)" rows="3" oninput="onTextEditorInputChange()" style="width: 100%; margin-bottom: 10px; background: #111418; border: 1px solid var(--border-color); color: white; padding: 8px 10px; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
           
           <div class="editor-controls-row">
             <select id="editFontFamily" style="flex: 1; min-width: 120px; text-overflow: ellipsis;" onchange="updateFormatButtonStates(); onTextEditorInputChange();">
@@ -668,8 +714,8 @@
           </div>
 
           <div style="display: flex; justify-content: space-between; gap: 8px;">
-            <button class="btn btn-primary" style="flex: 1;" onclick="applyTextEdit()">Apply Edit</button>
-            <button class="btn" style="color: var(--danger);" onclick="deleteSelectedText()">Delete</button>
+            <button class="btn btn-primary" id="btnApplyTextEdit" style="flex: 1;" onclick="applyTextEdit()">Apply Edit</button>
+            <button class="btn" id="btnDeleteText" style="color: var(--danger);" onclick="deleteSelectedText()">Delete</button>
             <button class="btn" onclick="closeTextEditor(true)">Cancel</button>
           </div>
         </div>
@@ -901,6 +947,13 @@
       document.getElementById('pageScannedStatus').innerText = pageInfo.is_scanned ? "⚠️ Scanned Image" : "Clean Vector/Text";
       document.getElementById('pageScannedStatus').style.color = pageInfo.is_scanned ? "var(--warning)" : "var(--success)";
 
+      // Update Scanned Document Alert Banner
+      const isScannedOrNoText = pageInfo.is_scanned || (pageInfo.text_blocks.length === 0 && pageInfo.images.length > 0);
+      const banner = document.getElementById('scannedAlertBanner');
+      if (banner) {
+        banner.style.display = isScannedOrNoText ? 'flex' : 'none';
+      }
+
       // List Fonts
       const fontsContainer = document.getElementById('pageFontsList');
       fontsContainer.innerHTML = "";
@@ -1031,6 +1084,41 @@
         };
         overlay.appendChild(spot);
       });
+
+      // Background click on overlay
+      overlay.onclick = (e) => {
+        if (e.target !== overlay) return;
+        if (isAddTextMode) {
+          const rect = overlay.getBoundingClientRect();
+          const clickX = Math.round(e.clientX - rect.left);
+          const clickY = Math.round(e.clientY - rect.top);
+          openNewTextEditor(clickX, clickY);
+        } else {
+          closeTextEditor();
+        }
+      };
+    }
+
+    // Add Text Mode state
+    let isAddTextMode = false;
+
+    function toggleAddTextMode() {
+      isAddTextMode = !isAddTextMode;
+      const btn = document.getElementById('btnAddText');
+      const stage = document.getElementById('pageStage');
+      if (isAddTextMode) {
+        if (btn) btn.classList.add('active');
+        if (stage) stage.classList.add('mode-add-text');
+        showToast("Click anywhere on the document to add new text.");
+      } else {
+        if (btn) btn.classList.remove('active');
+        if (stage) stage.classList.remove('mode-add-text');
+      }
+    }
+
+    function dismissScannedBanner() {
+      const banner = document.getElementById('scannedAlertBanner');
+      if (banner) banner.style.display = 'none';
     }
 
     // Track original state to prevent accidental or redundant edits
@@ -1168,8 +1256,75 @@
       const currentSpotH = parseFloat(hotspotElem.style.height) || (span.bbox[3] - span.bbox[1]);
       const stageW = parseFloat(document.getElementById('pageStage').style.width) || 800;
 
+      const popTitle = document.getElementById('popoverTitle');
+      if (popTitle) popTitle.innerText = "Direct PDF Text Object Editor";
+      const applyBtn = document.getElementById('btnApplyTextEdit');
+      if (applyBtn) applyBtn.innerText = "Apply Edit";
+      const delBtn = document.getElementById('btnDeleteText');
+      if (delBtn) delBtn.style.display = "inline-flex";
+
       popover.style.left = `${Math.max(10, Math.min(currentSpotX, stageW - 360))}px`;
       popover.style.top = `${currentSpotY + currentSpotH + 10}px`;
+      popover.style.display = 'block';
+      document.getElementById('editTextValue').focus();
+    }
+
+    // Open text editor to insert new text at arbitrary page coordinates
+    function openNewTextEditor(x, y) {
+      closeTextEditor();
+      if (isAddTextMode) {
+        toggleAddTextMode();
+      }
+
+      const defaultFontSize = 14.0;
+      const fakeSpan = {
+        isNewText: true,
+        text: "",
+        origin: [x, y],
+        bbox: [x, y - defaultFontSize, x + 100, y + 4],
+        size: defaultFontSize,
+        font: "helv",
+        color_rgb: [0, 0, 0]
+      };
+
+      // Create a temporary visual hotspot at insertion point
+      const spot = document.createElement('div');
+      spot.className = "text-hotspot selected";
+      spot.style.left = `${x}px`;
+      spot.style.top = `${y - defaultFontSize}px`;
+      spot.style.width = `100px`;
+      spot.style.height = `${defaultFontSize + 4}px`;
+      spot.style.border = '2px dashed #3b82f6';
+      spot.style.background = 'rgba(59, 130, 246, 0.15)';
+      document.getElementById('overlayLayer').appendChild(spot);
+
+      activeSpan = fakeSpan;
+      activeHotspotElem = spot;
+      origSpanOrigin = [x, y];
+      origSpanText = "";
+      origSpanFontSize = defaultFontSize;
+      origSpanFontFamily = "helv";
+      origSpanColor = "#000000";
+
+      const popover = document.getElementById('textEditorPopover');
+      const popoverTitle = document.getElementById('popoverTitle');
+      if (popoverTitle) popoverTitle.innerText = "Insert PDF Text Object";
+      const applyBtn = document.getElementById('btnApplyTextEdit');
+      if (applyBtn) applyBtn.innerText = "Insert Text";
+      const delBtn = document.getElementById('btnDeleteText');
+      if (delBtn) delBtn.style.display = "none";
+      
+      document.getElementById('editTextValue').value = "";
+      document.getElementById('editFontSize').value = defaultFontSize.toFixed(1);
+      document.getElementById('editFontFamily').value = "helv";
+      document.getElementById('editFontColor').value = "#000000";
+
+      updateFormatButtonStates();
+      onTextEditorInputChange();
+
+      const stageW = parseFloat(document.getElementById('pageStage').style.width) || 800;
+      popover.style.left = `${Math.max(10, Math.min(x, stageW - 360))}px`;
+      popover.style.top = `${y + 15}px`;
       popover.style.display = 'block';
       document.getElementById('editTextValue').focus();
     }
@@ -1257,7 +1412,9 @@
     }
 
     function closeTextEditor(isCancel = false) {
-      if (isCancel && activeSpan && origSpanOrigin) {
+      if (activeSpan && activeSpan.isNewText && activeHotspotElem) {
+        activeHotspotElem.remove();
+      } else if (isCancel && activeSpan && origSpanOrigin) {
         activeSpan.origin = [...origSpanOrigin];
         if (activeHotspotElem) {
           activeHotspotElem.style.left = `${activeSpan.bbox[0]}px`;
@@ -1292,7 +1449,7 @@
       }
     }
 
-    // Apply surgical text replacement
+    // Apply surgical text replacement or new text insertion
     async function applyTextEdit() {
       if (!activeSpan) return;
 
@@ -1304,6 +1461,41 @@
       const r = parseInt(hexColor.substr(1,2), 16) / 255.0;
       const g = parseInt(hexColor.substr(3,2), 16) / 255.0;
       const b = parseInt(hexColor.substr(5,2), 16) / 255.0;
+
+      // New text insertion path
+      if (activeSpan.isNewText) {
+        if (!newText || !newText.trim()) {
+          closeTextEditor();
+          return;
+        }
+        showToast("Inserting genuine text object into PDF stream...");
+        try {
+          const resp = await fetch(`/api/documents/${currentDocId}/text/insert`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              page_index: currentPageIndex,
+              origin: activeSpan.origin,
+              text: newText,
+              font_name: fontName,
+              font_size: fontSize,
+              color_rgb: [r, g, b]
+            })
+          });
+
+          if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.detail || "Insert failed");
+          }
+
+          closeTextEditor();
+          showToast("✓ Text object inserted into PDF stream!");
+          await loadCurrentPage();
+        } catch (err) {
+          alert("Error inserting text: " + err.message);
+        }
+        return;
+      }
 
       // Guard: If nothing changed, safely exit without server roundtrip or redaction
       const originMoved = origSpanOrigin && (Math.abs(activeSpan.origin[0] - origSpanOrigin[0]) > 0.5 || Math.abs(activeSpan.origin[1] - origSpanOrigin[1]) > 0.5);
@@ -1485,7 +1677,12 @@
 
     // Run OCR
     async function runOCR() {
-      showToast("Running C-native MuPDF OCR on document...");
+      if (!currentDocId) return;
+      const btnOcr = document.getElementById('btnOCR');
+      const bannerBtn = document.getElementById('bannerOcrBtn');
+      if (btnOcr) { btnOcr.disabled = true; btnOcr.innerText = "⏳ Running OCR..."; }
+      if (bannerBtn) { bannerBtn.disabled = true; bannerBtn.innerText = "⏳ Processing..."; }
+      showToast("Running C-native MuPDF OCR on document page...");
       try {
         const resp = await fetch(`/api/documents/${currentDocId}/ocr`, {
           method: "POST",
@@ -1497,10 +1694,14 @@
         });
         const res = await resp.json();
         if (!resp.ok) throw new Error(res.detail || "OCR failed");
-        showToast(res.message);
-        loadCurrentPage();
+        showToast(res.message || "OCR completed successfully!");
+        dismissScannedBanner();
+        await loadCurrentPage();
       } catch (err) {
         alert("OCR error: " + err.message);
+      } finally {
+        if (btnOcr) { btnOcr.disabled = false; btnOcr.innerText = "⚡ OCR Text"; }
+        if (bannerBtn) { bannerBtn.disabled = false; bannerBtn.innerText = "Run OCR to Edit"; }
       }
     }
 

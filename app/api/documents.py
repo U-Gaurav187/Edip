@@ -1,4 +1,5 @@
 import logging
+import pymupdf
 from fastapi import APIRouter, UploadFile, File, HTTPException, Response, Query
 from fastapi.responses import Response
 from typing import Optional
@@ -11,17 +12,27 @@ logger = logging.getLogger("pdf_engine")
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif")
+
 @router.post("/upload", response_model=DocumentInspectionResponse)
 async def upload_document(file: UploadFile = File(...)):
     """
-    Upload any PDF document. Parses all objects, fonts, text, images, and vectors.
+    Upload any PDF document or document photo/scan (PNG, JPG, WebP).
+    Images are seamlessly converted to high-fidelity PDF pages.
+    Parses all objects, fonts, text, images, and vectors.
     """
     filename = file.filename or "document.pdf"
     content_type = file.content_type or ""
     logger.info(f"Upload received: filename='{filename}', content_type='{content_type}', size_header={file.size}")
 
-    if not filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail=f"Only PDF files are supported. Got: '{filename}'")
+    is_image = any(filename.lower().endswith(ext) for ext in IMAGE_EXTENSIONS) or content_type.startswith("image/")
+    is_pdf = filename.lower().endswith(".pdf") or content_type == "application/pdf"
+
+    if not is_pdf and not is_image:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported format. Please upload a PDF or image file (PNG, JPG, JPEG, WebP). Got: '{filename}'"
+        )
 
     # Read file bytes — use a chunked approach to handle large files
     chunks = []
@@ -40,12 +51,28 @@ async def upload_document(file: UploadFile = File(...)):
             detail=f"Uploaded file '{filename}' is empty (0 bytes received). Please check the file and try again."
         )
 
-    # Basic PDF header validation
-    if not contents[:5] in (b"%PDF-", b"\xef\xbb\xbf%P"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"File '{filename}' does not appear to be a valid PDF (missing %PDF- header)."
-        )
+    # Convert image to genuine PDF document
+    if is_image:
+        try:
+            ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "png"
+            if ext not in ["png", "jpg", "jpeg", "webp", "bmp", "tiff", "tif"]:
+                ext = "png"
+            img_doc = pymupdf.open(stream=contents, filetype=ext)
+            pdf_bytes = img_doc.convert_to_pdf()
+            contents = pdf_bytes
+            base_name = filename.rsplit(".", 1)[0] if "." in filename else filename
+            filename = f"{base_name}.pdf"
+            logger.info(f"Successfully converted photo/scan '{file.filename}' to PDF ({len(contents)} bytes)")
+        except Exception as img_err:
+            logger.exception(f"Failed to convert image '{filename}' to PDF")
+            raise HTTPException(status_code=400, detail=f"Could not convert document image to PDF: {str(img_err)}")
+    else:
+        # Basic PDF header validation
+        if not contents[:5] in (b"%PDF-", b"\xef\xbb\xbf%P"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"File '{filename}' does not appear to be a valid PDF (missing %PDF- header)."
+            )
 
     try:
         doc_id = engine_manager.create_session_from_bytes(contents, filename=filename)
