@@ -81,15 +81,19 @@ class RealPDFTextEditor:
         font_size = max(origin_y - r_bbox.y0, 6.0)
         
         # Start with safe bounding box around target ink.
-        # On raster/scanned documents or pages with images, apply 1.8pt expansion
-        # to ensure every anti-aliased subpixel/speck of old ink is completely engulfed.
+        # On raster/scanned documents or pages with images, OCR bounding boxes commonly
+        # truncate character serifs, italic overhangs, and underlying title underlines
+        # by 3 to 6 points. We dynamically scale padding based on typography font size
+        # while lines below strictly guard against any neighbor-word or neighbor-line collisions.
         is_raster_page = len(page.get_images()) > 0
-        pad = 1.8 if is_raster_page else 0.5
+        pad_x = max(5.5, min(font_size * 0.35, 8.0)) if is_raster_page else 0.5
+        pad_y_top = max(2.5, min(font_size * 0.15, 4.0)) if is_raster_page else 0.5
+        pad_y_bot = max(3.0, min(font_size * 0.20, 6.0)) if is_raster_page else 0.5
         
-        safe_x0 = max(0.0, r_bbox.x0 - pad)
-        safe_x1 = min(page.rect.width, r_bbox.x1 + pad)
-        safe_y0 = max(0.0, min(r_bbox.y0, origin_y - 0.95 * font_size) - pad)
-        safe_y1 = min(page.rect.height, max(r_bbox.y1, origin_y + min(0.30 * font_size, 5.0)) + pad)
+        safe_x0 = max(0.0, r_bbox.x0 - pad_x)
+        safe_x1 = min(page.rect.width, r_bbox.x1 + pad_x)
+        safe_y0 = max(0.0, min(r_bbox.y0, origin_y - 0.95 * font_size) - pad_y_top)
+        safe_y1 = min(page.rect.height, max(r_bbox.y1, origin_y + min(0.35 * font_size, 6.0)) + pad_y_bot)
         
         # Inspect all text spans on page to ensure zero collision with other spans
         try:
