@@ -93,3 +93,29 @@ def test_upload_inspect_and_edit_pipeline():
     # 6. Close session
     close_resp = client.delete(f"/api/documents/{doc_id}")
     assert close_resp.status_code == 200
+
+def test_render_jpeg_and_png_formats():
+    pdf_bytes = create_sample_pdf_bytes()
+    files = {"file": ("test_render.pdf", pdf_bytes, "application/pdf")}
+    upload_resp = client.post("/api/documents/upload", files=files)
+    assert upload_resp.status_code == 200
+    doc_id = upload_resp.json()["document_id"]
+    
+    # 1. Default PNG (backward-compatible)
+    resp_png = client.get(f"/api/documents/{doc_id}/pages/0/render")
+    assert resp_png.status_code == 200
+    assert resp_png.headers["content-type"] == "image/png"
+    
+    # 2. Fast JPEG for progressive rendering & 0.25s priority stage loading
+    resp_jpeg = client.get(f"/api/documents/{doc_id}/pages/0/render?format=jpeg&quality=85&dpi=150")
+    assert resp_jpeg.status_code == 200
+    assert resp_jpeg.headers["content-type"] == "image/jpeg"
+    assert "public, max-age=" in resp_jpeg.headers.get("cache-control", "")
+    
+    # 3. Low-DPI thumbnail JPEG
+    resp_thumb = client.get(f"/api/documents/{doc_id}/pages/0/render?format=jpeg&quality=75&dpi=36")
+    assert resp_thumb.status_code == 200
+    assert resp_thumb.headers["content-type"] == "image/jpeg"
+    assert len(resp_thumb.content) < len(resp_jpeg.content)
+    
+    client.delete(f"/api/documents/{doc_id}")

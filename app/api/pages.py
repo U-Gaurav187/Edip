@@ -28,20 +28,23 @@ async def inspect_page(doc_id: str, page_index: int):
 async def render_page(
     doc_id: str,
     page_index: int,
-    dpi: int = Query(150, ge=20, le=300, description="Rendering resolution (20 to 300 DPI)")
+    dpi: int = Query(150, ge=20, le=300, description="Rendering resolution (20 to 300 DPI)"),
+    format: str = Query("png", description="'png' (default) or 'jpeg' for fast lightweight transfer"),
+    quality: int = Query(85, ge=30, le=100)
 ):
     """
     Renders high-fidelity rasterized view of the PDF page for web display.
+    Supports fast compressed JPEG (85% for page, 75% for thumbnail) and PNG.
     """
     try:
-        png_bytes = engine_manager.render_page_image(doc_id, page_index, dpi=dpi)
+        q = quality if dpi > 50 else min(quality, 75)
+        img_bytes, media_type = engine_manager.render_page_image(doc_id, page_index, dpi=dpi, img_format=format, quality=q)
         return Response(
-            content=png_bytes,
-            media_type="image/png",
+            content=img_bytes,
+            media_type=media_type,
             headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0"
+                "Content-Type": media_type,
+                "Cache-Control": "public, max-age=1800"
             }
         )
     except KeyError:

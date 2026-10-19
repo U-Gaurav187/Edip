@@ -188,14 +188,24 @@ class PDFEngineManager:
                 raise ValueError(f"Page index {page_index} out of bounds")
             return self._inspect_page_internal(session.doc, page_index)
 
-    def render_page_image(self, doc_id: str, page_index: int, dpi: int = 150) -> bytes:
+    def render_page_image(self, doc_id: str, page_index: int, dpi: int = 150, img_format: str = "png", quality: int = 85) -> Tuple[bytes, str]:
         session = self.get_session(doc_id)
         with session.lock:
             if page_index < 0 or page_index >= len(session.doc):
                 raise ValueError(f"Page index {page_index} out of bounds")
             page = session.doc[page_index]
             pix = page.get_pixmap(dpi=dpi, alpha=False)
-            return pix.tobytes("png")
+            
+            fmt = img_format.lower()
+            if fmt in ("jpg", "jpeg"):
+                return pix.tobytes("jpg", jpg_quality=quality), "image/jpeg"
+            elif fmt == "webp":
+                try:
+                    return pix.tobytes("webp"), "image/webp"
+                except Exception:
+                    return pix.tobytes("jpg", jpg_quality=quality), "image/jpeg"
+            else:
+                return pix.tobytes("png"), "image/png"
 
     def _inspect_page_internal(self, doc: pymupdf.Document, page_index: int) -> PageInspection:
         page = doc[page_index]

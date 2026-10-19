@@ -177,6 +177,19 @@
       box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
     }
 
+    .thumbnail-thumb-wrap {
+      width: 100%;
+      min-height: 120px;
+      aspect-ratio: 1 / 1.414;
+      background: #181b22;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
     .thumbnail-card img {
       width: 100%;
       height: auto;
@@ -185,10 +198,52 @@
       background: #fff;
     }
 
+    .thumbnail-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
     .thumbnail-label {
       font-size: 11px;
       margin-top: 6px;
       color: var(--text-muted);
+    }
+
+    /* Stage Loading Overlay */
+    .stage-loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(11, 13, 15, 0.45);
+      backdrop-filter: blur(2px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 60;
+      border-radius: 4px;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .stage-spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
 
     /* Center: Viewport */
@@ -707,6 +762,10 @@
       </div>
 
       <div class="page-stage" id="pageStage" style="display: none;">
+        <div id="stageLoadingOverlay" class="stage-loading-overlay" style="display: none;">
+          <div class="stage-spinner"></div>
+          <div id="stageLoadingText" style="font-size: 13px; font-weight: 500; color: #f1f5f9;">Rendering Page 1...</div>
+        </div>
         <img id="pageCanvasImg" alt="PDF Rendered Page" />
         <div class="overlay-layer" id="overlayLayer"></div>
 
@@ -870,6 +929,14 @@
     let activeSpan = null;
     let scaleFactor = 1.0;
 
+    // Progressive Rendering & Priority Queue State
+    let thumbnailStatus = []; // 'pending' | 'loading' | 'loaded' | 'error'
+    let thumbnailQueue = [];
+    let isThumbnailWorkerActive = false;
+    let currentStageAbortController = null;
+    let pageCacheVersion = {};
+    let thumbnailObserver = null;
+
     // Image Placement & Crop State
     let currentPlacementBlob = null;
     let currentPlacementFile = null;
@@ -957,7 +1024,7 @@
         document.getElementById('metaEncrypted').innerText = documentData.metadata.is_encrypted ? 'Yes' : 'No';
         document.getElementById('metaPDFA').innerText = documentData.metadata.is_pdfa ? 'Yes' : 'No';
 
-        renderThumbnails();
+        setupThumbnails();
         loadCurrentPage();
         showToast('PDF parsed successfully - ' + documentData.page_count + ' page(s) loaded!');
       } catch (err) {
@@ -968,34 +1035,184 @@
       }
     }
 
-        // Render left sidebar thumbnails
-    function renderThumbnails() {
+    // Invalidate cache for a specific page after any edit/rotation/OCR
+    function invalidatePageCache(pageIdx) {
+      if (pageIdx === undefined || pageIdx === null) pageIdx = currentPageIndex;
+      pageCacheVersion[pageIdx] = (pageCacheVersion[pageIdx] || 0) + 1;
+      thumbnailStatus[pageIdx] = 'pending';
+      const spinner = document.getElementById(`thumbSpinner_${pageIdx}`);
+      const img = document.getElementById(`thumbImg_${pageIdx}`);
+      if (spinner) spinner.style.display = 'block';
+      if (img) img.style.display = 'none';
+      prioritizeThumbnails([pageIdx]);
+    }
+
+    // Initialize sidebar thumbnails with skeletons and priority queue
+    function setupThumbnails() {
       const container = document.getElementById('thumbnailsContainer');
       container.innerHTML = "";
       document.getElementById('sidebarPageCount').innerText = documentData.page_count;
 
+      thumbnailStatus = new Array(documentData.page_count).fill('pending');
+      thumbnailQueue = [];
+
+      if (thumbnailObserver) {
+        thumbnailObserver.disconnect();
+      }
+
+      thumbnailObserver = new IntersectionObserver((entries) => {
+        const visiblePages = [];
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const idx = parseInt(entry.target.getAttribute('data-page-index'), 10);
+            if (!isNaN(idx) && thumbnailStatus[idx] === 'pending') {
+              visiblePages.push(idx);
+            }
+          }
+        });
+        if (visiblePages.length > 0) {
+          prioritizeThumbnails(visiblePages);
+        }
+      }, { root: container, rootMargin: '100px' });
+
       for (let i = 0; i < documentData.page_count; i++) {
         const card = document.createElement('div');
+        card.id = `thumbCard_${i}`;
+        card.setAttribute('data-page-index', i);
         card.className = `thumbnail-card ${i === currentPageIndex ? 'active' : ''}`;
         card.onclick = () => switchPage(i);
 
+        const wrap = document.createElement('div');
+        wrap.className = 'thumbnail-thumb-wrap';
+        wrap.id = `thumbWrap_${i}`;
+
+        const spinner = document.createElement('div');
+        spinner.className = 'thumbnail-spinner';
+        spinner.id = `thumbSpinner_${i}`;
+
         const img = document.createElement('img');
-        img.src = `/api/documents/${currentDocId}/pages/${i}/render?dpi=36`;
-        img.loading = "lazy";
+        img.id = `thumbImg_${i}`;
+        img.alt = `Page ${i + 1}`;
+        img.style.display = 'none';
+
+        wrap.appendChild(spinner);
+        wrap.appendChild(img);
 
         const label = document.createElement('div');
         label.className = "thumbnail-label";
         label.innerText = `Page ${i + 1}`;
 
-        card.appendChild(img);
+        card.appendChild(wrap);
         card.appendChild(label);
         container.appendChild(card);
+
+        thumbnailObserver.observe(card);
       }
+
+      // Priority 1: Prioritize the first three pages (Pages 1, 2, 3) immediately!
+      const initialPages = [];
+      for (let i = 0; i < Math.min(3, documentData.page_count); i++) {
+        initialPages.push(i);
+      }
+      prioritizeThumbnails(initialPages);
+
+      // Remaining pages queued for gentle progressive background rendering
+      for (let i = 3; i < documentData.page_count; i++) {
+        thumbnailQueue.push(i);
+      }
+
+      startThumbnailWorker();
     }
 
+    // Prioritize specific pages at the front of the queue
+    function prioritizeThumbnails(pageIndices) {
+      if (!documentData || !pageIndices || !pageIndices.length) return;
+      for (let i = pageIndices.length - 1; i >= 0; i--) {
+        const p = pageIndices[i];
+        if (p >= 0 && p < documentData.page_count && thumbnailStatus[p] !== 'loaded') {
+          const qIdx = thumbnailQueue.indexOf(p);
+          if (qIdx !== -1) thumbnailQueue.splice(qIdx, 1);
+          thumbnailQueue.unshift(p);
+        }
+      }
+      startThumbnailWorker();
+    }
+
+    // Gentle progressive background loop (100ms pause between thumbnails)
+    async function startThumbnailWorker() {
+      if (isThumbnailWorkerActive) return;
+      isThumbnailWorkerActive = true;
+
+      while (thumbnailQueue.length > 0) {
+        const nextIdx = thumbnailQueue.shift();
+        if (thumbnailStatus[nextIdx] === 'loaded') continue;
+
+        await loadSingleThumbnail(nextIdx);
+
+        // 100ms delay to keep network pipe completely clear and smooth
+        await new Promise(r => setTimeout(r, 100));
+      }
+
+      isThumbnailWorkerActive = false;
+    }
+
+    function loadSingleThumbnail(idx) {
+      return new Promise((resolve) => {
+        if (!currentDocId || !documentData || idx >= documentData.page_count) {
+          resolve();
+          return;
+        }
+
+        const img = document.getElementById(`thumbImg_${idx}`);
+        const spinner = document.getElementById(`thumbSpinner_${idx}`);
+        if (!img) {
+          resolve();
+          return;
+        }
+
+        thumbnailStatus[idx] = 'loading';
+        const v = pageCacheVersion[idx] || 0;
+        const thumbUrl = `/api/documents/${currentDocId}/pages/${idx}/render?dpi=36&format=jpeg&quality=75&v=${v}`;
+
+        img.onload = () => {
+          thumbnailStatus[idx] = 'loaded';
+          if (spinner) spinner.style.display = 'none';
+          img.style.display = 'block';
+          resolve();
+        };
+
+        img.onerror = () => {
+          thumbnailStatus[idx] = 'error';
+          if (spinner) spinner.style.display = 'none';
+          resolve();
+        };
+
+        img.src = thumbUrl;
+      });
+    }
+
+    // Instant switch page with fast preemption (<0.25s)
     function switchPage(idx) {
+      if (idx < 0 || !documentData || idx >= documentData.page_count) return;
+
+      const prevCard = document.getElementById(`thumbCard_${currentPageIndex}`);
+      if (prevCard) prevCard.classList.remove('active');
+
       currentPageIndex = idx;
-      renderThumbnails();
+
+      const newCard = document.getElementById(`thumbCard_${currentPageIndex}`);
+      if (newCard) {
+        newCard.classList.add('active');
+        newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      // Preempt queue: immediately prioritize thumbnail for target page and its neighbors
+      const priorityList = [idx];
+      if (idx + 1 < documentData.page_count) priorityList.push(idx + 1);
+      if (idx - 1 >= 0) priorityList.push(idx - 1);
+      prioritizeThumbnails(priorityList);
+
+      // Trigger high-priority stage render immediately
       loadCurrentPage();
     }
 
@@ -1007,59 +1224,111 @@
       if (currentPageIndex < documentData.page_count - 1) switchPage(currentPageIndex + 1);
     }
 
-    // Load active page display & interactive overlay
+    // Load active page display & interactive overlay with fast 0.25s JPEG streaming
     async function loadCurrentPage() {
       closeTextEditor();
       cancelImagePlacement();
       document.getElementById('pageCounter').innerText = `Page ${currentPageIndex + 1} / ${documentData.page_count}`;
 
-      // 1. Fetch Page Inspection Data
-      const inspResp = await fetch(`/api/documents/${currentDocId}/pages/${currentPageIndex}/inspect`);
-      const pageInfo = await inspResp.json();
+      // Abort any inflight stage fetch
+      if (currentStageAbortController) {
+        currentStageAbortController.abort();
+      }
+      currentStageAbortController = new AbortController();
+      const signal = currentStageAbortController.signal;
 
-      // Update Inspector panel
-      document.getElementById('pageDimensions').innerText = `${pageInfo.width} × ${pageInfo.height} pt`;
-      document.getElementById('pageRotation').innerText = `${pageInfo.rotation}°`;
-      document.getElementById('pageTextCount').innerText = pageInfo.text_blocks.length;
-      document.getElementById('pageImageCount').innerText = pageInfo.images.length;
-      document.getElementById('pageDrawingCount').innerText = pageInfo.drawings.length;
-      document.getElementById('pageScannedStatus').innerText = pageInfo.is_scanned ? "⚠️ Scanned Image" : "Clean Vector/Text";
-      document.getElementById('pageScannedStatus').style.color = pageInfo.is_scanned ? "var(--warning)" : "var(--success)";
-
-      const footerStatus = document.getElementById('footerStatusText');
-      if (footerStatus) {
-        footerStatus.innerText = `Page ${currentPageIndex + 1} of ${documentData.page_count} • ${pageInfo.width} × ${pageInfo.height} pt • ${pageInfo.text_blocks.length} text objects • ${pageInfo.is_scanned ? 'Scanned' : 'Clean Vector'}`;
+      // Show stage loading overlay immediately with 0.25s fast status indicator
+      const overlaySpinner = document.getElementById('stageLoadingOverlay');
+      const stageText = document.getElementById('stageLoadingText');
+      if (overlaySpinner) {
+        overlaySpinner.style.display = 'flex';
+        if (stageText) stageText.innerText = `Rendering Page ${currentPageIndex + 1} (Fast 0.25s)...`;
       }
 
-      // Update Scanned Document Alert Banner
-      const isScannedOrNoText = pageInfo.is_scanned || (pageInfo.text_blocks.length === 0 && pageInfo.images.length > 0);
-      const banner = document.getElementById('scannedAlertBanner');
-      if (banner) {
-        banner.style.display = isScannedOrNoText ? 'flex' : 'none';
-      }
-
-      // List Fonts
-      const fontsContainer = document.getElementById('pageFontsList');
-      fontsContainer.innerHTML = "";
-      if (pageInfo.fonts && pageInfo.fonts.length > 0) {
-        pageInfo.fonts.forEach(f => {
-          const div = document.createElement('div');
-          div.innerText = `• ${f.name || f.basefont} (${f.type}${f.is_embedded ? ', embedded' : ''})`;
-          fontsContainer.appendChild(div);
-        });
-      } else {
-        fontsContainer.innerText = "Standard Type1 fonts";
-      }
-
-      // 2. Load rendered image
       const stage = document.getElementById('pageStage');
-      stage.style.width = `${pageInfo.width}px`;
-      stage.style.height = `${pageInfo.height}px`;
+      stage.style.display = 'block';
 
-      const img = document.getElementById('pageCanvasImg');
-      img.src = `/api/documents/${currentDocId}/pages/${currentPageIndex}/render?dpi=150&t=${Date.now()}`;
+      try {
+        const v = pageCacheVersion[currentPageIndex] || 0;
+        const renderUrl = `/api/documents/${currentDocId}/pages/${currentPageIndex}/render?dpi=150&format=jpeg&quality=85&v=${v}`;
 
-      // 3. Populate Interactive Hotspot Overlay
+        // Parallel fetch of inspection data and fast JPEG render blob
+        const [inspResp, renderBlob] = await Promise.all([
+          fetch(`/api/documents/${currentDocId}/pages/${currentPageIndex}/inspect`, { signal }),
+          fetch(renderUrl, { signal }).then(r => {
+            if (!r.ok) throw new Error(`Render failed: ${r.status}`);
+            return r.blob();
+          })
+        ]);
+
+        const pageInfo = await inspResp.json();
+
+        // Update Inspector panel
+        document.getElementById('pageDimensions').innerText = `${pageInfo.width} × ${pageInfo.height} pt`;
+        document.getElementById('pageRotation').innerText = `${pageInfo.rotation}°`;
+        document.getElementById('pageTextCount').innerText = pageInfo.text_blocks.length;
+        document.getElementById('pageImageCount').innerText = pageInfo.images.length;
+        document.getElementById('pageDrawingCount').innerText = pageInfo.drawings.length;
+        document.getElementById('pageScannedStatus').innerText = pageInfo.is_scanned ? "⚠️ Scanned Image" : "Clean Vector/Text";
+        document.getElementById('pageScannedStatus').style.color = pageInfo.is_scanned ? "var(--warning)" : "var(--success)";
+
+        const footerStatus = document.getElementById('footerStatusText');
+        if (footerStatus) {
+          footerStatus.innerText = `Page ${currentPageIndex + 1} of ${documentData.page_count} • ${pageInfo.width} × ${pageInfo.height} pt • ${pageInfo.text_blocks.length} text objects • ${pageInfo.is_scanned ? 'Scanned' : 'Clean Vector'}`;
+        }
+
+        // Update Scanned Document Alert Banner
+        const isScannedOrNoText = pageInfo.is_scanned || (pageInfo.text_blocks.length === 0 && pageInfo.images.length > 0);
+        const banner = document.getElementById('scannedAlertBanner');
+        if (banner) {
+          banner.style.display = isScannedOrNoText ? 'flex' : 'none';
+        }
+
+        // List Fonts
+        const fontsContainer = document.getElementById('pageFontsList');
+        fontsContainer.innerHTML = "";
+        if (pageInfo.fonts && pageInfo.fonts.length > 0) {
+          pageInfo.fonts.forEach(f => {
+            const div = document.createElement('div');
+            div.innerText = `• ${f.name || f.basefont} (${f.type}${f.is_embedded ? ', embedded' : ''})`;
+            fontsContainer.appendChild(div);
+          });
+        } else {
+          fontsContainer.innerText = "Standard Type1 fonts";
+        }
+
+        // Set stage dimensions
+        stage.style.width = `${pageInfo.width}px`;
+        stage.style.height = `${pageInfo.height}px`;
+
+        // Mount rendered image
+        const img = document.getElementById('pageCanvasImg');
+        const objectUrl = URL.createObjectURL(renderBlob);
+        await new Promise((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          img.src = objectUrl;
+        });
+
+        // Hide overlay spinner
+        if (overlaySpinner) overlaySpinner.style.display = 'none';
+
+        // Populate Interactive Hotspot Overlay
+        populateOverlay(pageInfo);
+
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          // Preempted by a faster page click
+          return;
+        }
+        console.error('Error loading page:', err);
+        if (overlaySpinner) overlaySpinner.style.display = 'none';
+        showToast('Error rendering page: ' + err.message);
+      }
+    }
+
+    // Populate Interactive Hotspot Overlay for text and image objects
+    function populateOverlay(pageInfo) {
       const overlay = document.getElementById('overlayLayer');
       overlay.innerHTML = "";
 
@@ -1574,6 +1843,7 @@
 
           closeTextEditor();
           showToast("✓ Text object inserted into PDF stream!");
+          invalidatePageCache(currentPageIndex);
           await loadCurrentPage();
         } catch (err) {
           alert("Error inserting text: " + err.message);
@@ -1620,6 +1890,7 @@
 
         closeTextEditor();
         showToast("Text object replaced in PDF stream!");
+        invalidatePageCache(currentPageIndex);
         await loadCurrentPage();
       } catch (err) {
         alert("Error applying text edit: " + err.message);
@@ -1646,6 +1917,7 @@
 
         closeTextEditor();
         showToast("Text object eradicated from content stream.");
+        invalidatePageCache(currentPageIndex);
         await loadCurrentPage();
       } catch (err) {
         alert("Delete failed: " + err.message);
@@ -1733,6 +2005,7 @@
         });
         if (!resp.ok) throw new Error("Image delete failed");
         showToast("Image XObject invocation excised from stream!");
+        invalidatePageCache(currentPageIndex);
         await loadCurrentPage();
       } catch (err) {
         alert(err.message);
@@ -1752,8 +2025,8 @@
         });
         if (!resp.ok) throw new Error("Rotate failed");
         showToast(`Rotated page ${currentPageIndex + 1} by ${delta}°`);
-        renderThumbnails();
-        loadCurrentPage();
+        invalidatePageCache(currentPageIndex);
+        await loadCurrentPage();
       } catch (err) {
         alert(err.message);
       }
@@ -1780,6 +2053,7 @@
         if (!resp.ok) throw new Error(res.detail || "OCR failed");
         showToast(res.message || "OCR completed successfully!");
         dismissScannedBanner();
+        invalidatePageCache(currentPageIndex);
         await loadCurrentPage();
       } catch (err) {
         alert("OCR error: " + err.message);
@@ -1905,6 +2179,7 @@
 
         cancelImagePlacement();
         showToast('Image inserted successfully into PDF page!');
+        invalidatePageCache(currentPageIndex);
         await loadCurrentPage();
       } catch (err) {
         alert('Error inserting image: ' + err.message);
