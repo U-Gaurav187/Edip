@@ -45,14 +45,24 @@ class PDFSession:
     def save_to_disk(self):
         """
         Persists the current in-memory document state to disk.
-        Ensures edits survive server sleep or container restart.
+        Uses incremental save or direct-to-file saving to avoid buffering large PDFs in RAM.
+        Ensures edits survive server sleep or container restart without OOM crashes.
         """
         if self.file_path and self.doc:
             try:
-                pdf_bytes = self.doc.tobytes(garbage=3, deflate=True)
-                self.file_path.write_bytes(pdf_bytes)
+                if self.doc.can_save_incrementally():
+                    self.doc.save(str(self.file_path), incremental=True, encryption=pymupdf.PDF_ENCRYPT_KEEP)
+                else:
+                    temp_path = self.file_path.with_suffix(".tmp")
+                    self.doc.save(str(temp_path), garbage=0, deflate=False)
+                    temp_path.replace(self.file_path)
             except Exception:
-                pass
+                try:
+                    temp_path = self.file_path.with_suffix(".tmp")
+                    self.doc.save(str(temp_path))
+                    temp_path.replace(self.file_path)
+                except Exception:
+                    pass
 
 class PDFEngineManager:
     """
@@ -198,14 +208,22 @@ class PDFEngineManager:
             
             fmt = img_format.lower()
             if fmt in ("jpg", "jpeg"):
-                return pix.tobytes("jpg", jpg_quality=quality), "image/jpeg"
+                data = pix.tobytes("jpg", jpg_quality=quality)
+                pix = None
+                return data, "image/jpeg"
             elif fmt == "webp":
                 try:
-                    return pix.tobytes("webp"), "image/webp"
+                    data = pix.tobytes("webp")
+                    pix = None
+                    return data, "image/webp"
                 except Exception:
-                    return pix.tobytes("jpg", jpg_quality=quality), "image/jpeg"
+                    data = pix.tobytes("jpg", jpg_quality=quality)
+                    pix = None
+                    return data, "image/jpeg"
             else:
-                return pix.tobytes("png"), "image/png"
+                data = pix.tobytes("png")
+                pix = None
+                return data, "image/png"
 
     def _inspect_page_internal(self, doc: pymupdf.Document, page_index: int) -> PageInspection:
         page = doc[page_index]

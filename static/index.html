@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Acrobat-Grade Native PDF Studio</title>
+  <title>PDF Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -181,13 +181,47 @@
       width: 100%;
       min-height: 120px;
       aspect-ratio: 1 / 1.414;
-      background: #181b22;
+      background: #14171d;
       border-radius: 4px;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       position: relative;
       overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .thumbnail-skeleton {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 10px;
+      background: linear-gradient(90deg, #151820 25%, #232734 50%, #151820 75%);
+      background-size: 200% 100%;
+      animation: skeleton-shimmer 1.8s infinite ease-in-out;
+      border-radius: 4px;
+    }
+
+    .skeleton-line {
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .skeleton-line.title { width: 60%; height: 8px; margin-bottom: 4px; }
+    .skeleton-line.l1 { width: 90%; }
+    .skeleton-line.l2 { width: 75%; }
+    .skeleton-line.l3 { width: 85%; }
+    .skeleton-line.foot { width: 45%; align-self: flex-end; }
+
+    @keyframes skeleton-shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
     }
 
     .thumbnail-card img {
@@ -196,15 +230,7 @@
       border-radius: 4px;
       display: block;
       background: #fff;
-    }
-
-    .thumbnail-spinner {
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255, 255, 255, 0.15);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      z-index: 2;
     }
 
     .thumbnail-label {
@@ -213,37 +239,69 @@
       color: var(--text-muted);
     }
 
-    /* Stage Loading Overlay */
+    /* Stage Loading Overlay with Modern Skeleton Waiting Card & Progress Bar */
     .stage-loading-overlay {
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(11, 13, 15, 0.45);
-      backdrop-filter: blur(2px);
+      background: rgba(11, 13, 16, 0.72);
+      backdrop-filter: blur(4px);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 12px;
       z-index: 60;
       border-radius: 4px;
       pointer-events: none;
       transition: opacity 0.2s ease;
     }
 
-    .stage-spinner {
-      width: 36px;
-      height: 36px;
-      border: 3px solid rgba(255, 255, 255, 0.2);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+    .stage-skeleton-card {
+      background: #161922;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      padding: 24px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+      min-width: 260px;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    .stage-progress-bar {
+      width: 100%;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .stage-progress-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 45%;
+      background: linear-gradient(90deg, #2563eb, #38bdf8);
+      border-radius: 3px;
+      animation: progress-slide 1.4s infinite ease-in-out;
+    }
+
+    @keyframes progress-slide {
+      0% { left: -45%; width: 45%; }
+      50% { width: 60%; }
+      100% { left: 100%; width: 45%; }
+    }
+
+    .stage-loading-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: #f1f5f9;
+      letter-spacing: 0.3px;
     }
 
     /* Center: Viewport */
@@ -687,7 +745,7 @@
   <header>
     <div class="brand">
       <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9.5 8.5h-2v-4h2c.83 0 1.5.67 1.5 1.5v1c0 .83-.67 1.5-1.5 1.5zm6 4h-1.5v-2h-1v2H11v-7h2.5c.83 0 1.5.67 1.5 1.5v1.5c0 .6-.35 1.11-.86 1.34L15.5 15.5z"/></svg>
-      <span>Acrobat Studio</span>
+      <span>PDF Studio</span>
       <span class="status-badge badge-clean">Real Object Engine</span>
     </div>
 
@@ -763,8 +821,12 @@
 
       <div class="page-stage" id="pageStage" style="display: none;">
         <div id="stageLoadingOverlay" class="stage-loading-overlay" style="display: none;">
-          <div class="stage-spinner"></div>
-          <div id="stageLoadingText" style="font-size: 13px; font-weight: 500; color: #f1f5f9;">Rendering Page 1...</div>
+          <div class="stage-skeleton-card">
+            <div class="stage-progress-bar">
+              <div class="stage-progress-fill"></div>
+            </div>
+            <div id="stageLoadingText" class="stage-loading-text">Loading Page 1...</div>
+          </div>
         </div>
         <img id="pageCanvasImg" alt="PDF Rendered Page" />
         <div class="overlay-layer" id="overlayLayer"></div>
@@ -1040,9 +1102,9 @@
       if (pageIdx === undefined || pageIdx === null) pageIdx = currentPageIndex;
       pageCacheVersion[pageIdx] = (pageCacheVersion[pageIdx] || 0) + 1;
       thumbnailStatus[pageIdx] = 'pending';
-      const spinner = document.getElementById(`thumbSpinner_${pageIdx}`);
+      const skeleton = document.getElementById(`thumbSkeleton_${pageIdx}`);
       const img = document.getElementById(`thumbImg_${pageIdx}`);
-      if (spinner) spinner.style.display = 'block';
+      if (skeleton) skeleton.style.display = 'flex';
       if (img) img.style.display = 'none';
       prioritizeThumbnails([pageIdx]);
     }
@@ -1056,25 +1118,6 @@
       thumbnailStatus = new Array(documentData.page_count).fill('pending');
       thumbnailQueue = [];
 
-      if (thumbnailObserver) {
-        thumbnailObserver.disconnect();
-      }
-
-      thumbnailObserver = new IntersectionObserver((entries) => {
-        const visiblePages = [];
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            const idx = parseInt(entry.target.getAttribute('data-page-index'), 10);
-            if (!isNaN(idx) && thumbnailStatus[idx] === 'pending') {
-              visiblePages.push(idx);
-            }
-          }
-        });
-        if (visiblePages.length > 0) {
-          prioritizeThumbnails(visiblePages);
-        }
-      }, { root: container, rootMargin: '100px' });
-
       for (let i = 0; i < documentData.page_count; i++) {
         const card = document.createElement('div');
         card.id = `thumbCard_${i}`;
@@ -1086,16 +1129,24 @@
         wrap.className = 'thumbnail-thumb-wrap';
         wrap.id = `thumbWrap_${i}`;
 
-        const spinner = document.createElement('div');
-        spinner.className = 'thumbnail-spinner';
-        spinner.id = `thumbSpinner_${i}`;
+        // Sleek skeleton waiting card with shimmer lines
+        const skeleton = document.createElement('div');
+        skeleton.className = 'thumbnail-skeleton';
+        skeleton.id = `thumbSkeleton_${i}`;
+        skeleton.innerHTML = `
+          <div class="skeleton-line title"></div>
+          <div class="skeleton-line l1"></div>
+          <div class="skeleton-line l2"></div>
+          <div class="skeleton-line l3"></div>
+          <div class="skeleton-line foot"></div>
+        `;
 
         const img = document.createElement('img');
         img.id = `thumbImg_${i}`;
         img.alt = `Page ${i + 1}`;
         img.style.display = 'none';
 
-        wrap.appendChild(spinner);
+        wrap.appendChild(skeleton);
         wrap.appendChild(img);
 
         const label = document.createElement('div');
@@ -1105,23 +1156,15 @@
         card.appendChild(wrap);
         card.appendChild(label);
         container.appendChild(card);
-
-        thumbnailObserver.observe(card);
       }
 
-      // Priority 1: Prioritize the first three pages (Pages 1, 2, 3) immediately!
+      // Priority Rule: ONLY render the first three pages (Pages 1, 2, 3) initially!
+      // Do NOT loop through remaining pages in the background.
       const initialPages = [];
       for (let i = 0; i < Math.min(3, documentData.page_count); i++) {
         initialPages.push(i);
       }
       prioritizeThumbnails(initialPages);
-
-      // Remaining pages queued for gentle progressive background rendering
-      for (let i = 3; i < documentData.page_count; i++) {
-        thumbnailQueue.push(i);
-      }
-
-      startThumbnailWorker();
     }
 
     // Prioritize specific pages at the front of the queue
@@ -1138,7 +1181,7 @@
       startThumbnailWorker();
     }
 
-    // Gentle progressive background loop (100ms pause between thumbnails)
+    // Process queued thumbnails sequentially
     async function startThumbnailWorker() {
       if (isThumbnailWorkerActive) return;
       isThumbnailWorkerActive = true;
@@ -1149,8 +1192,8 @@
 
         await loadSingleThumbnail(nextIdx);
 
-        // 100ms delay to keep network pipe completely clear and smooth
-        await new Promise(r => setTimeout(r, 100));
+        // Gentle pause between thumbnails
+        await new Promise(r => setTimeout(r, 60));
       }
 
       isThumbnailWorkerActive = false;
@@ -1164,7 +1207,7 @@
         }
 
         const img = document.getElementById(`thumbImg_${idx}`);
-        const spinner = document.getElementById(`thumbSpinner_${idx}`);
+        const skeleton = document.getElementById(`thumbSkeleton_${idx}`);
         if (!img) {
           resolve();
           return;
@@ -1176,14 +1219,14 @@
 
         img.onload = () => {
           thumbnailStatus[idx] = 'loaded';
-          if (spinner) spinner.style.display = 'none';
+          if (skeleton) skeleton.style.display = 'none';
           img.style.display = 'block';
           resolve();
         };
 
         img.onerror = () => {
           thumbnailStatus[idx] = 'error';
-          if (spinner) spinner.style.display = 'none';
+          if (skeleton) skeleton.style.display = 'none';
           resolve();
         };
 
@@ -1191,7 +1234,7 @@
       });
     }
 
-    // Instant switch page with fast preemption (<0.25s)
+    // Switch page: activates target page and renders it on demand
     function switchPage(idx) {
       if (idx < 0 || !documentData || idx >= documentData.page_count) return;
 
@@ -1206,13 +1249,15 @@
         newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
 
-      // Preempt queue: immediately prioritize thumbnail for target page and its neighbors
-      const priorityList = [idx];
-      if (idx + 1 < documentData.page_count) priorityList.push(idx + 1);
-      if (idx - 1 >= 0) priorityList.push(idx - 1);
-      prioritizeThumbnails(priorityList);
+      // Load thumbnail on demand for current page and adjacent page
+      const pagesToLoad = [];
+      if (thumbnailStatus[idx] !== 'loaded') pagesToLoad.push(idx);
+      if (idx + 1 < documentData.page_count && thumbnailStatus[idx + 1] !== 'loaded') pagesToLoad.push(idx + 1);
+      if (pagesToLoad.length > 0) {
+        prioritizeThumbnails(pagesToLoad);
+      }
 
-      // Trigger high-priority stage render immediately
+      // Trigger stage render immediately
       loadCurrentPage();
     }
 
@@ -1224,7 +1269,7 @@
       if (currentPageIndex < documentData.page_count - 1) switchPage(currentPageIndex + 1);
     }
 
-    // Load active page display & interactive overlay with fast 0.25s JPEG streaming
+    // Load active page display & interactive overlay with progress bar
     async function loadCurrentPage() {
       closeTextEditor();
       cancelImagePlacement();
@@ -1237,12 +1282,12 @@
       currentStageAbortController = new AbortController();
       const signal = currentStageAbortController.signal;
 
-      // Show stage loading overlay immediately with 0.25s fast status indicator
+      // Show stage loading overlay immediately with skeleton progress bar
       const overlaySpinner = document.getElementById('stageLoadingOverlay');
       const stageText = document.getElementById('stageLoadingText');
       if (overlaySpinner) {
         overlaySpinner.style.display = 'flex';
-        if (stageText) stageText.innerText = `Rendering Page ${currentPageIndex + 1} (Fast 0.25s)...`;
+        if (stageText) stageText.innerText = `Loading Page ${currentPageIndex + 1}...`;
       }
 
       const stage = document.getElementById('pageStage');
@@ -1252,14 +1297,27 @@
         const v = pageCacheVersion[currentPageIndex] || 0;
         const renderUrl = `/api/documents/${currentDocId}/pages/${currentPageIndex}/render?dpi=150&format=jpeg&quality=85&v=${v}`;
 
-        // Parallel fetch of inspection data and fast JPEG render blob
-        const [inspResp, renderBlob] = await Promise.all([
-          fetch(`/api/documents/${currentDocId}/pages/${currentPageIndex}/inspect`, { signal }),
-          fetch(renderUrl, { signal }).then(r => {
-            if (!r.ok) throw new Error(`Render failed: ${r.status}`);
-            return r.blob();
-          })
-        ]);
+        // Fetch inspection and fast JPEG render blob with automatic single retry
+        let inspResp, renderBlob;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            [inspResp, renderBlob] = await Promise.all([
+              fetch(`/api/documents/${currentDocId}/pages/${currentPageIndex}/inspect`, { signal }),
+              fetch(renderUrl, { signal }).then(r => {
+                if (!r.ok) throw new Error(`Render status ${r.status}`);
+                return r.blob();
+              })
+            ]);
+            if (inspResp.ok) break;
+          } catch (e) {
+            if (signal.aborted) return;
+            if (attempt === 0) {
+              await new Promise(r => setTimeout(r, 350));
+            } else {
+              throw e;
+            }
+          }
+        }
 
         const pageInfo = await inspResp.json();
 
@@ -1310,7 +1368,7 @@
           img.src = objectUrl;
         });
 
-        // Hide overlay spinner
+        // Hide overlay skeleton progress bar
         if (overlaySpinner) overlaySpinner.style.display = 'none';
 
         // Populate Interactive Hotspot Overlay
@@ -1318,13 +1376,11 @@
 
       } catch (err) {
         if (err.name === 'AbortError') {
-          // Preempted by a faster page click
           return;
         }
         console.error('Error loading page:', err);
         if (overlaySpinner) overlaySpinner.style.display = 'none';
-        showToast('Error rendering page: ' + err.message);
-      }
+        showToast('Error loading page: ' + err.message);
     }
 
     // Populate Interactive Hotspot Overlay for text and image objects
@@ -1837,8 +1893,15 @@
           });
 
           if (!resp.ok) {
-            const err = await resp.json();
-            throw new Error(err.detail || "Insert failed");
+            let errMsg = `Insert failed (${resp.status})`;
+            try {
+              const err = await resp.json();
+              errMsg = err.detail || errMsg;
+            } catch (_) {
+              const txt = await resp.text();
+              if (txt) errMsg = txt.slice(0, 100);
+            }
+            throw new Error(errMsg);
           }
 
           closeTextEditor();
@@ -1884,8 +1947,15 @@
         });
 
         if (!resp.ok) {
-          const err = await resp.json();
-          throw new Error(err.detail || "Edit failed");
+          let errMsg = `Edit failed (${resp.status})`;
+          try {
+            const err = await resp.json();
+            errMsg = err.detail || errMsg;
+          } catch (_) {
+            const txt = await resp.text();
+            if (txt) errMsg = txt.slice(0, 100);
+          }
+          throw new Error(errMsg);
         }
 
         closeTextEditor();
@@ -1913,7 +1983,17 @@
           })
         });
 
-        if (!resp.ok) throw new Error("Delete failed");
+        if (!resp.ok) {
+          let errMsg = `Delete failed (${resp.status})`;
+          try {
+            const err = await resp.json();
+            errMsg = err.detail || errMsg;
+          } catch (_) {
+            const txt = await resp.text();
+            if (txt) errMsg = txt.slice(0, 100);
+          }
+          throw new Error(errMsg);
+        }
 
         closeTextEditor();
         showToast("Text object eradicated from content stream.");
