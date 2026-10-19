@@ -578,6 +578,52 @@
     .page-stage.mode-add-text .overlay-layer {
       cursor: crosshair !important;
     }
+
+    /* Bottom Footer Bar */
+    .app-footer {
+      height: 32px;
+      background: var(--bg-toolbar);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 11px;
+      color: var(--text-muted);
+      z-index: 100;
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    .footer-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .footer-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      display: inline-block;
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+    }
+
+    .footer-credit {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .footer-credit .author-name {
+      color: #f1f5f9;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
   </style>
 </head>
 <body>
@@ -639,6 +685,9 @@
             Real ISO 32000-1 PDF object editing. Supports native digital PDFs, scanned documents, and photos.
           </p>
           <button class="btn btn-primary">Browse File (PDF / Image)</button>
+          <div style="margin-top: 24px; font-size: 13px; color: var(--text-muted); font-weight: 500;">
+            Made by <span style="color: #f1f5f9; font-weight: 600;">Gaurav</span>
+          </div>
         </div>
       </div>
 
@@ -758,9 +807,24 @@
           ✓ Zero white rectangles or visual overlays.
         </p>
       </div>
+
+      <div style="margin-top: auto; padding: 14px; text-align: center; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border-color);">
+        Made by <strong style="color: #f1f5f9;">Gaurav</strong>
+      </div>
     </div>
 
   </div>
+
+  <!-- Bottom Status / Credit Bar -->
+  <footer class="app-footer">
+    <div class="footer-left">
+      <span class="footer-dot"></span>
+      <span id="footerStatusText">PDF Studio Engine Ready &bull; Clean ISO 32000-1 Consolidation</span>
+    </div>
+    <div class="footer-credit">
+      <span>Made by <span class="author-name">Gaurav</span></span>
+    </div>
+  </footer>
 
   <!-- Image Crop Modal -->
   <div id="cropModal" class="crop-modal-overlay">
@@ -839,8 +903,10 @@
         fileInput.value = '';
         return;
       }
-      if (!file.name.toLowerCase().endsWith('.pdf')) {
-        alert('Error: Only PDF files are supported. Selected: ' + file.name);
+      const validExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff'];
+      const hasValidExt = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+      if (!hasValidExt) {
+        alert('Error: Only PDF and image files (PNG, JPG, WEBP, BMP, TIFF) are supported. Selected: ' + file.name);
         fileInput.value = '';
         return;
       }
@@ -856,7 +922,20 @@
           body: formData
         });
 
-        const responseBody = await resp.json();
+        let responseBody;
+        const contentType = resp.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          responseBody = await resp.json();
+        } else {
+          const text = await resp.text();
+          if (!resp.ok) {
+            if (resp.status === 502 || resp.status === 504) {
+              throw new Error("Server temporarily timed out or ran out of memory processing this large file (502 Bad Gateway). Please retry uploading now with the updated streaming engine.");
+            }
+            throw new Error(`Server error (${resp.status}): ${text.slice(0, 150)}`);
+          }
+          throw new Error("Invalid response from server: " + text.slice(0, 150));
+        }
 
         if (!resp.ok) {
           const detail = responseBody.detail || JSON.stringify(responseBody);
@@ -946,6 +1025,11 @@
       document.getElementById('pageDrawingCount').innerText = pageInfo.drawings.length;
       document.getElementById('pageScannedStatus').innerText = pageInfo.is_scanned ? "⚠️ Scanned Image" : "Clean Vector/Text";
       document.getElementById('pageScannedStatus').style.color = pageInfo.is_scanned ? "var(--warning)" : "var(--success)";
+
+      const footerStatus = document.getElementById('footerStatusText');
+      if (footerStatus) {
+        footerStatus.innerText = `Page ${currentPageIndex + 1} of ${documentData.page_count} • ${pageInfo.width} × ${pageInfo.height} pt • ${pageInfo.text_blocks.length} text objects • ${pageInfo.is_scanned ? 'Scanned' : 'Clean Vector'}`;
+      }
 
       // Update Scanned Document Alert Banner
       const isScannedOrNoText = pageInfo.is_scanned || (pageInfo.text_blocks.length === 0 && pageInfo.images.length > 0);

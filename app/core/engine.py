@@ -78,6 +78,21 @@ class PDFEngineManager:
         self._cleanup_expired_sessions()
         return doc_id
 
+    def create_session_from_file(self, file_path: Path, filename: str = "document.pdf", doc_id: Optional[str] = None) -> str:
+        """
+        Creates a PDF session directly from a file path on disk without duplicating bytes in RAM.
+        Uses mmap/file-descriptor access to minimize memory usage for large documents.
+        """
+        if not doc_id:
+            doc_id = str(uuid.uuid4())
+        doc = pymupdf.open(str(file_path))
+        session = PDFSession(doc_id=doc_id, filename=filename, doc=doc, file_path=file_path)
+        with self._lock:
+            self._sessions[doc_id] = session
+            
+        self._cleanup_expired_sessions()
+        return doc_id
+
     def get_session(self, doc_id: str) -> PDFSession:
         with self._lock:
             session = self._sessions.get(doc_id)
@@ -124,7 +139,7 @@ class PDFEngineManager:
                     except Exception:
                         pass
 
-    def inspect_document(self, doc_id: str) -> DocumentInspectionResponse:
+    def inspect_document(self, doc_id: str, max_pages: Optional[int] = None) -> DocumentInspectionResponse:
         session = self.get_session(doc_id)
         with session.lock:
             doc = session.doc
@@ -143,8 +158,18 @@ class PDFEngineManager:
                 is_pdfa=doc.is_pdfa if hasattr(doc, "is_pdfa") else False
             )
             
+            # For documents with up to 5 pages, inspect all.
+            # For larger documents (brochures, books, 10-100+ pages), inspect the initial page (page 0)
+            # and let subsequent pages be fetched on-demand by /pages/{page_index}/inspect.
+            # This guarantees sub-second response times and eliminates 502 Bad Gateway OOM errors on cloud hosts.
+            num_to_inspect = len(doc)
+            if max_pages is not None:
+                num_to_inspect = min(len(doc), max_pages)
+            elif len(doc) > 5:
+                num_to_inspect = 1
+
             pages_list: List[PageInspection] = []
-            for p_idx in range(len(doc)):
+            for p_idx in range(num_to_inspect):
                 page_data = self._inspect_page_internal(doc, p_idx)
                 pages_list.append(page_data)
 

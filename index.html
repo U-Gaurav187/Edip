@@ -922,7 +922,20 @@
           body: formData
         });
 
-        const responseBody = await resp.json();
+        let responseBody;
+        const contentType = resp.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          responseBody = await resp.json();
+        } else {
+          const text = await resp.text();
+          if (!resp.ok) {
+            if (resp.status === 502 || resp.status === 504) {
+              throw new Error("Server temporarily timed out or ran out of memory processing this large file (502 Bad Gateway). Please retry uploading now with the updated streaming engine.");
+            }
+            throw new Error(`Server error (${resp.status}): ${text.slice(0, 150)}`);
+          }
+          throw new Error("Invalid response from server: " + text.slice(0, 150));
+        }
 
         if (!resp.ok) {
           const detail = responseBody.detail || JSON.stringify(responseBody);
