@@ -1,0 +1,2283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acrobat-Grade Native PDF Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #121417;
+      --bg-panel: #1a1d23;
+      --bg-toolbar: #22262f;
+      --border-color: #2e3440;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-active: #3b82f6;
+      --danger: #ef4444;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --overlay-text-hover: rgba(37, 99, 235, 0.25);
+      --overlay-text-active: rgba(37, 99, 235, 0.5);
+      --overlay-image-hover: rgba(16, 185, 129, 0.25);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top Bar */
+    header {
+      background: var(--bg-toolbar);
+      border-bottom: 1px solid var(--border-color);
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.2px;
+    }
+
+    .brand svg {
+      width: 24px;
+      height: 24px;
+      fill: #e11d48;
+    }
+
+    .doc-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+      max-width: 250px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      background: #2b303c;
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .btn:hover {
+      background: #373e4d;
+      border-color: #4b5563;
+    }
+
+    .btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-success {
+      background: #059669;
+      border-color: #059669;
+      color: white;
+    }
+    .btn-success:hover {
+      background: #047857;
+    }
+
+    /* Main Container */
+    .app-workspace {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Left Sidebar: Pages */
+    .sidebar-pages {
+      width: 200px;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .sidebar-header {
+      padding: 12px;
+      font-size: 12px;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .thumbnail-list {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .thumbnail-card {
+      background: var(--bg-dark);
+      border: 2px solid transparent;
+      border-radius: 6px;
+      padding: 6px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+
+    .thumbnail-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
+    }
+
+    .thumbnail-card img {
+      width: 100%;
+      height: auto;
+      border-radius: 4px;
+      display: block;
+      background: #fff;
+    }
+
+    .thumbnail-label {
+      font-size: 11px;
+      margin-top: 6px;
+      color: var(--text-muted);
+    }
+
+    /* Center: Viewport */
+    .viewport {
+      flex: 1;
+      background: #0b0d0f;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px;
+      position: relative;
+    }
+
+    .page-stage {
+      position: relative;
+      background: #ffffff;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+      user-select: none;
+    }
+
+    #pageCanvasImg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    /* Interactive Overlay */
+    .overlay-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: auto;
+    }
+
+    .text-hotspot {
+      position: absolute;
+      box-sizing: border-box;
+      border: 1px dashed transparent;
+      cursor: text;
+      transition: background-color 0.1s ease, border-color 0.1s ease;
+    }
+
+    .text-hotspot:hover {
+      background-color: var(--overlay-text-hover);
+      border-color: var(--accent);
+    }
+
+    .text-hotspot.selected {
+      background-color: var(--overlay-text-active);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    .image-hotspot {
+      position: absolute;
+      border: 1px dashed transparent;
+      cursor: pointer;
+    }
+
+    .image-hotspot:hover {
+      background-color: var(--overlay-image-hover);
+      border-color: var(--success);
+    }
+
+    /* Right Sidebar: Inspector */
+    .sidebar-inspector {
+      width: 320px;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .inspector-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .section-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    .prop-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .prop-label {
+      color: var(--text-muted);
+    }
+
+    .prop-val {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-main);
+    }
+
+    /* Editor Modal / Float Box */
+    .editor-popover {
+      position: absolute;
+      background: var(--bg-panel);
+      border: 1px solid #3b82f6;
+      border-radius: 8px;
+      padding: 14px;
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.7);
+      z-index: 9999;
+      width: 340px;
+      display: none;
+    }
+
+    .editor-popover input[type="text"] {
+      width: 100%;
+      background: #111418;
+      border: 1px solid var(--border-color);
+      color: white;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .editor-popover input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .editor-controls-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+
+    .editor-controls-row select, .editor-controls-row input[type="number"] {
+      background: #111418;
+      border: 1px solid var(--border-color);
+      color: white;
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-clean {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+    }
+
+    /* Empty Upload Screen */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+      padding: 40px;
+    }
+
+    .upload-box {
+      border: 2px dashed #3b4252;
+      border-radius: 12px;
+      padding: 60px 40px;
+      background: rgba(26, 29, 35, 0.5);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      max-width: 460px;
+      width: 100%;
+    }
+
+    .upload-box:hover {
+      border-color: var(--accent);
+      background: rgba(37, 99, 235, 0.05);
+    }
+
+    .upload-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    /* Toast Notification */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1e293b;
+      border: 1px solid var(--accent);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 1000;
+    }
+
+    /* Image Placement & Resizing Box */
+    .image-placement-box {
+      position: absolute;
+      border: 2px dashed #3b82f6;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+      cursor: move;
+      touch-action: none;
+      z-index: 50;
+      user-select: none;
+    }
+
+    .image-placement-box img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      pointer-events: none;
+      -webkit-user-drag: none;
+    }
+
+    .resize-handle {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: #3b82f6;
+      border: 1.5px solid #ffffff;
+      border-radius: 2px;
+      box-sizing: border-box;
+      z-index: 52;
+    }
+
+    .handle-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+    .handle-n  { top: -6px; left: calc(50% - 5px); cursor: ns-resize; }
+    .handle-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+    .handle-e  { top: calc(50% - 5px); right: -6px; cursor: ew-resize; }
+    .handle-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+    .handle-s  { bottom: -6px; left: calc(50% - 5px); cursor: ns-resize; }
+    .handle-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+    .handle-w  { top: calc(50% - 5px); left: -6px; cursor: ew-resize; }
+
+    .placement-toolbar {
+      position: absolute;
+      bottom: -46px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      background: #1a1d23;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 4px 8px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+      white-space: nowrap;
+      z-index: 55;
+      pointer-events: auto;
+    }
+
+    /* Crop Modal */
+    .crop-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.82);
+      backdrop-filter: blur(4px);
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .crop-dialog {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      max-width: 90vw;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.85);
+      overflow: hidden;
+    }
+
+    .crop-header {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #16191f;
+    }
+
+    .crop-body {
+      padding: 24px;
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #0d0f12;
+      user-select: none;
+    }
+
+    .crop-footer {
+      padding: 12px 18px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #16191f;
+    }
+
+    .crop-canvas-wrapper {
+      position: relative;
+      display: inline-block;
+      overflow: hidden;
+      line-height: 0;
+    }
+
+    .crop-selection-box {
+      position: absolute;
+      border: 2px dashed #ffffff;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65);
+      cursor: move;
+      box-sizing: border-box;
+      touch-action: none;
+    }
+
+    .crop-handle {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background: #3b82f6;
+      border: 2px solid #ffffff;
+      border-radius: 2px;
+      box-sizing: border-box;
+    }
+
+    .crop-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+    .crop-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+    .crop-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+    .crop-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+
+    /* Scanned Document Alert Banner */
+    .scanned-banner {
+      width: calc(100% - 32px);
+      max-width: 860px;
+      margin: 12px auto 0 auto;
+      background: linear-gradient(90deg, #1e293b, #0f172a);
+      border: 1px solid #3b82f6;
+      border-radius: 8px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+      z-index: 50;
+      flex-shrink: 0;
+    }
+
+    .scanned-banner-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .page-stage.mode-add-text,
+    .page-stage.mode-add-text .overlay-layer {
+      cursor: crosshair !important;
+    }
+
+    /* Bottom Footer Bar */
+    .app-footer {
+      height: 32px;
+      background: var(--bg-toolbar);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 11px;
+      color: var(--text-muted);
+      z-index: 100;
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    .footer-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .footer-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      display: inline-block;
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+    }
+
+    .footer-credit {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .footer-credit .author-name {
+      color: #f1f5f9;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header Navigation -->
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9.5 8.5h-2v-4h2c.83 0 1.5.67 1.5 1.5v1c0 .83-.67 1.5-1.5 1.5zm6 4h-1.5v-2h-1v2H11v-7h2.5c.83 0 1.5.67 1.5 1.5v1.5c0 .6-.35 1.11-.86 1.34L15.5 15.5z"/></svg>
+      <span>Acrobat Studio</span>
+      <span class="status-badge badge-clean">Real Object Engine</span>
+    </div>
+
+    <div class="doc-meta" id="docTitle">No document loaded</div>
+
+    <div class="toolbar-actions" id="activeToolbar" style="display: none;">
+      <button class="btn" id="btnPrevPage" onclick="prevPage()">◀</button>
+      <span id="pageCounter" style="font-size: 13px; font-weight: 500;">Page 1 / 1</span>
+      <button class="btn" id="btnNextPage" onclick="nextPage()">▶</button>
+
+      <div style="width: 1px; height: 24px; background: var(--border-color); margin: 0 4px;"></div>
+
+      <button class="btn" onclick="rotateCurrentPage(90)">↻ Rotate 90°</button>
+      
+      <div style="width: 1px; height: 24px; background: var(--border-color); margin: 0 4px;"></div>
+
+      <button class="btn" id="btnAddText" onclick="toggleAddTextMode()" title="Click anywhere on the document to add new text">🔤 Add Text</button>
+      <button class="btn" id="btnOCR" onclick="runOCR()" title="Run MuPDF/Tesseract OCR to detect text and make scanned documents editable">⚡ OCR Text</button>
+      <button class="btn" onclick="triggerAddImage()">🖼️ Add Image</button>
+      <input type="file" id="imagePlacementInput" accept="image/png,image/jpeg,image/webp,image/gif" style="display: none;" onchange="handleImageSelectedForPlacement(event)">
+
+      <div style="width: 1px; height: 24px; background: var(--border-color); margin: 0 4px;"></div>
+
+      <button class="btn btn-success" onclick="exportPDF('pdf')">💾 Export Clean PDF</button>
+      <button class="btn" onclick="exportPDF('flattened')">Flatten</button>
+    </div>
+
+    <div>
+      <input type="file" id="fileInput" accept="application/pdf,image/png,image/jpeg,image/webp,image/bmp" style="display: none;" onchange="handleFileSelected(event)">
+      <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Upload PDF / Photo</button>
+    </div>
+  </header>
+
+  <!-- Workspace Container -->
+  <div class="app-workspace">
+    
+    <!-- Left Sidebar: Page Thumbnails -->
+    <div class="sidebar-pages" id="pagesSidebar" style="display: none;">
+      <div class="sidebar-header">Pages (<span id="sidebarPageCount">0</span>)</div>
+      <div class="thumbnail-list" id="thumbnailsContainer"></div>
+    </div>
+
+    <!-- Central Viewport -->
+    <div class="viewport" id="viewport">
+      <div class="empty-state" id="emptyState">
+        <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+          <div class="upload-icon">📄</div>
+          <h2 style="margin-bottom: 8px;">Open a PDF or Document Photo to Edit</h2>
+          <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+            Real ISO 32000-1 PDF object editing. Supports native digital PDFs, scanned documents, and photos.
+          </p>
+          <button class="btn btn-primary">Browse File (PDF / Image)</button>
+          <div style="margin-top: 24px; font-size: 13px; color: var(--text-muted); font-weight: 500;">
+            Made by <span style="color: #f1f5f9; font-weight: 600;">Gaurav</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Smart Scanned Document Banner -->
+      <div id="scannedAlertBanner" class="scanned-banner" style="display: none;">
+        <div class="scanned-banner-content">
+          <span style="font-size: 20px;">⚡</span>
+          <div>
+            <div style="font-weight: 600; font-size: 13px;">Scanned / Photo Page Detected</div>
+            <div style="font-size: 12px; opacity: 0.85;">This page has no vector text yet. Run OCR to make all printed words clickable, selectable, and editable.</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button class="btn btn-primary" id="bannerOcrBtn" onclick="runOCR()" style="font-size: 12px; padding: 5px 12px;">Run OCR to Edit</button>
+          <button class="btn" onclick="dismissScannedBanner()" style="padding: 4px 8px; font-size: 12px;" title="Dismiss">✕</button>
+        </div>
+      </div>
+
+      <div class="page-stage" id="pageStage" style="display: none;">
+        <img id="pageCanvasImg" alt="PDF Rendered Page" />
+        <div class="overlay-layer" id="overlayLayer"></div>
+
+        <!-- Interactive Image Placement & Resize Box -->
+        <div id="imagePlacementBox" class="image-placement-box" style="display: none;">
+          <img id="placementImg" alt="Image to place" />
+          <div class="resize-handle handle-nw" data-dir="nw"></div>
+          <div class="resize-handle handle-n" data-dir="n"></div>
+          <div class="resize-handle handle-ne" data-dir="ne"></div>
+          <div class="resize-handle handle-e" data-dir="e"></div>
+          <div class="resize-handle handle-se" data-dir="se"></div>
+          <div class="resize-handle handle-s" data-dir="s"></div>
+          <div class="resize-handle handle-sw" data-dir="sw"></div>
+          <div class="resize-handle handle-w" data-dir="w"></div>
+          
+          <div class="placement-toolbar">
+            <button type="button" class="btn" style="padding: 4px 10px; font-size: 12px;" onclick="openCropModal()">✂️ Crop</button>
+            <button type="button" class="btn btn-success" style="padding: 4px 10px; font-size: 12px;" onclick="applyImagePlacement()">✓ Add to PDF</button>
+            <button type="button" class="btn" style="padding: 4px 10px; font-size: 12px; color: var(--danger);" onclick="cancelImagePlacement()">Cancel</button>
+          </div>
+        </div>
+        
+        <!-- Floating Text Editor Popover -->
+        <div class="editor-popover" id="textEditorPopover">
+          <div id="popoverHeader" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; cursor: move; user-select: none;">
+            <div id="popoverTitle" style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--accent);">
+              Direct PDF Text Object Editor
+            </div>
+            <div style="font-size: 10px; background: rgba(59, 130, 246, 0.2); color: #93c5fd; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59, 130, 246, 0.5); cursor: move;">
+              ✥ Drag to move
+            </div>
+          </div>
+          <textarea id="editTextValue" placeholder="Type text... (Press Enter for new line)" rows="3" oninput="onTextEditorInputChange()" style="width: 100%; margin-bottom: 10px; background: #111418; border: 1px solid var(--border-color); color: white; padding: 8px 10px; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
+          
+          <div class="editor-controls-row">
+            <select id="editFontFamily" style="flex: 1; min-width: 120px; text-overflow: ellipsis;" onchange="updateFormatButtonStates(); onTextEditorInputChange();">
+              <option value="helv">Helvetica Regular</option>
+              <option value="hebo">Helvetica Bold</option>
+              <option value="heit">Helvetica Italic</option>
+              <option value="hebi">Helvetica Bold Italic</option>
+              <option value="tiro">Times Regular</option>
+              <option value="tibo">Times Bold</option>
+              <option value="tiit">Times Italic</option>
+              <option value="tibi">Times Bold Italic</option>
+              <option value="cour">Courier Regular</option>
+              <option value="cobo">Courier Bold</option>
+              <option value="coit">Courier Italic</option>
+              <option value="cobi">Courier Bold Italic</option>
+            </select>
+            <button type="button" id="btnToggleBold" class="btn" style="padding: 4px 10px; font-weight: 800; font-size: 13px; min-width: 32px;" onclick="toggleBold()" title="Toggle Bold (B)">B</button>
+            <button type="button" id="btnToggleItalic" class="btn" style="padding: 4px 10px; font-style: italic; font-size: 13px; min-width: 30px;" onclick="toggleItalic()" title="Toggle Italic (I)">I</button>
+            <input type="number" id="editFontSize" min="1" max="288" step="0.1" oninput="onTextEditorInputChange()" style="width: 58px;" title="Font Size" />
+            <input type="color" id="editFontColor" value="#000000" oninput="onTextEditorInputChange()" style="width: 32px; height: 28px; border: none; background: none; cursor: pointer;" title="Font Color" />
+          </div>
+
+          <div style="display: flex; justify-content: space-between; gap: 8px;">
+            <button class="btn btn-primary" id="btnApplyTextEdit" style="flex: 1;" onclick="applyTextEdit()">Apply Edit</button>
+            <button class="btn" id="btnDeleteText" style="color: var(--danger);" onclick="deleteSelectedText()">Delete</button>
+            <button class="btn" onclick="closeTextEditor(true)">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Sidebar: Object Tree & Stream Inspector -->
+    <div class="sidebar-inspector" id="inspectorSidebar" style="display: none;">
+      <div class="inspector-section">
+        <div class="section-title">Document Metadata</div>
+        <div class="prop-row"><span class="prop-label">Pages:</span><span class="prop-val" id="metaPages">-</span></div>
+        <div class="prop-row"><span class="prop-label">Encrypted:</span><span class="prop-val" id="metaEncrypted">No</span></div>
+        <div class="prop-row"><span class="prop-label">PDF/A:</span><span class="prop-val" id="metaPDFA">No</span></div>
+      </div>
+
+      <div class="inspector-section">
+        <div class="section-title">Current Page Objects</div>
+        <div class="prop-row"><span class="prop-label">Dimensions:</span><span class="prop-val" id="pageDimensions">-</span></div>
+        <div class="prop-row"><span class="prop-label">Rotation:</span><span class="prop-val" id="pageRotation">0°</span></div>
+        <div class="prop-row"><span class="prop-label">Text Blocks:</span><span class="prop-val" id="pageTextCount">0</span></div>
+        <div class="prop-row"><span class="prop-label">Images:</span><span class="prop-val" id="pageImageCount">0</span></div>
+        <div class="prop-row"><span class="prop-label">Vector Paths:</span><span class="prop-val" id="pageDrawingCount">0</span></div>
+        <div class="prop-row"><span class="prop-label">Scanned Status:</span><span class="prop-val" id="pageScannedStatus">Clean</span></div>
+      </div>
+
+      <div class="inspector-section">
+        <div class="section-title">Embedded Fonts</div>
+        <div id="pageFontsList" style="font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px;">
+          None detected
+        </div>
+      </div>
+
+      <div class="inspector-section">
+        <div class="section-title">Object Cleanliness Guarantee</div>
+        <p style="font-size: 12px; color: #10b981; line-height: 1.4;">
+          ✓ Operators physically purged from /Contents.<br/>
+          ✓ True BT ... ET PDF text objects generated.<br/>
+          ✓ 100% searchable & selectable.<br/>
+          ✓ Zero white rectangles or visual overlays.
+        </p>
+      </div>
+
+      <div style="margin-top: auto; padding: 14px; text-align: center; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border-color);">
+        Made by <strong style="color: #f1f5f9;">Gaurav</strong>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom Status / Credit Bar -->
+  <footer class="app-footer">
+    <div class="footer-left">
+      <span class="footer-dot"></span>
+      <span id="footerStatusText">PDF Studio Engine Ready &bull; Clean ISO 32000-1 Consolidation</span>
+    </div>
+    <div class="footer-credit">
+      <span>Made by <span class="author-name">Gaurav</span></span>
+    </div>
+  </footer>
+
+  <!-- Image Crop Modal -->
+  <div id="cropModal" class="crop-modal-overlay">
+    <div class="crop-dialog">
+      <div class="crop-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:16px;">✂️</span>
+          <span style="font-weight:700;">Crop Image</span>
+        </div>
+        <button class="btn" onclick="closeCropModal()" style="padding:4px 8px;">✕</button>
+      </div>
+      <div class="crop-body" id="cropBody">
+        <div id="cropCanvasWrapper" class="crop-canvas-wrapper">
+          <canvas id="cropCanvas"></canvas>
+          <div id="cropBox" class="crop-selection-box">
+            <div class="crop-handle crop-nw" data-handle="nw"></div>
+            <div class="crop-handle crop-ne" data-handle="ne"></div>
+            <div class="crop-handle crop-se" data-handle="se"></div>
+            <div class="crop-handle crop-sw" data-handle="sw"></div>
+          </div>
+        </div>
+      </div>
+      <div class="crop-footer">
+        <div style="font-size:12px; color:var(--text-muted);">
+          Drag crop box to reposition &bull; Drag corners to resize
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" onclick="resetCropSelection()">Reset Full</button>
+          <button class="btn" onclick="closeCropModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="confirmCrop()">Apply Crop</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast">Notification</div>
+
+  <script>
+    // State
+    let currentDocId = null;
+    let documentData = null;
+    let currentPageIndex = 0;
+    let activeSpan = null;
+    let scaleFactor = 1.0;
+
+    // Image Placement & Crop State
+    let currentPlacementBlob = null;
+    let currentPlacementFile = null;
+    let originalPlacementImage = null;
+    let placementAspectRatio = 1.0;
+    let activeCropImage = null;
+    let cropCanvasW = 0;
+    let cropCanvasH = 0;
+
+    // Toast notification
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3500);
+    }
+
+    // File selection
+    async function handleFileSelected(event) {
+      const fileInput = event.target;
+      const file = fileInput.files[0];
+      if (!file) {
+        console.warn('No file selected');
+        return;
+      }
+
+      // Client-side validation
+      console.log('Selected file:', file.name, 'size:', file.size, 'type:', file.type);
+      if (file.size === 0) {
+        alert('Error: The selected file is empty (0 bytes). Please choose a valid PDF.');
+        fileInput.value = '';
+        return;
+      }
+      const validExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff'];
+      const hasValidExt = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+      if (!hasValidExt) {
+        alert('Error: Only PDF and image files (PNG, JPG, WEBP, BMP, TIFF) are supported. Selected: ' + file.name);
+        fileInput.value = '';
+        return;
+      }
+
+      showToast('Uploading & parsing PDF objects...');
+
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+
+      try {
+        const resp = await fetch('/api/documents/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const responseBody = await resp.json();
+
+        if (!resp.ok) {
+          const detail = responseBody.detail || JSON.stringify(responseBody);
+          throw new Error(detail);
+        }
+
+        documentData = responseBody;
+        currentDocId = documentData.document_id;
+        currentPageIndex = 0;
+
+        document.getElementById('docTitle').innerText = documentData.filename;
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('pageStage').style.display = 'block';
+        document.getElementById('activeToolbar').style.display = 'flex';
+        document.getElementById('pagesSidebar').style.display = 'flex';
+        document.getElementById('inspectorSidebar').style.display = 'flex';
+
+        document.getElementById('metaPages').innerText = documentData.page_count;
+        document.getElementById('metaEncrypted').innerText = documentData.metadata.is_encrypted ? 'Yes' : 'No';
+        document.getElementById('metaPDFA').innerText = documentData.metadata.is_pdfa ? 'Yes' : 'No';
+
+        renderThumbnails();
+        loadCurrentPage();
+        showToast('PDF parsed successfully - ' + documentData.page_count + ' page(s) loaded!');
+      } catch (err) {
+        console.error('Upload failed:', err);
+        alert('Upload error: ' + err.message);
+      } finally {
+        fileInput.value = '';
+      }
+    }
+
+        // Render left sidebar thumbnails
+    function renderThumbnails() {
+      const container = document.getElementById('thumbnailsContainer');
+      container.innerHTML = "";
+      document.getElementById('sidebarPageCount').innerText = documentData.page_count;
+
+      for (let i = 0; i < documentData.page_count; i++) {
+        const card = document.createElement('div');
+        card.className = `thumbnail-card ${i === currentPageIndex ? 'active' : ''}`;
+        card.onclick = () => switchPage(i);
+
+        const img = document.createElement('img');
+        img.src = `/api/documents/${currentDocId}/pages/${i}/render?dpi=36`;
+        img.loading = "lazy";
+
+        const label = document.createElement('div');
+        label.className = "thumbnail-label";
+        label.innerText = `Page ${i + 1}`;
+
+        card.appendChild(img);
+        card.appendChild(label);
+        container.appendChild(card);
+      }
+    }
+
+    function switchPage(idx) {
+      currentPageIndex = idx;
+      renderThumbnails();
+      loadCurrentPage();
+    }
+
+    function prevPage() {
+      if (currentPageIndex > 0) switchPage(currentPageIndex - 1);
+    }
+
+    function nextPage() {
+      if (currentPageIndex < documentData.page_count - 1) switchPage(currentPageIndex + 1);
+    }
+
+    // Load active page display & interactive overlay
+    async function loadCurrentPage() {
+      closeTextEditor();
+      cancelImagePlacement();
+      document.getElementById('pageCounter').innerText = `Page ${currentPageIndex + 1} / ${documentData.page_count}`;
+
+      // 1. Fetch Page Inspection Data
+      const inspResp = await fetch(`/api/documents/${currentDocId}/pages/${currentPageIndex}/inspect`);
+      const pageInfo = await inspResp.json();
+
+      // Update Inspector panel
+      document.getElementById('pageDimensions').innerText = `${pageInfo.width} × ${pageInfo.height} pt`;
+      document.getElementById('pageRotation').innerText = `${pageInfo.rotation}°`;
+      document.getElementById('pageTextCount').innerText = pageInfo.text_blocks.length;
+      document.getElementById('pageImageCount').innerText = pageInfo.images.length;
+      document.getElementById('pageDrawingCount').innerText = pageInfo.drawings.length;
+      document.getElementById('pageScannedStatus').innerText = pageInfo.is_scanned ? "⚠️ Scanned Image" : "Clean Vector/Text";
+      document.getElementById('pageScannedStatus').style.color = pageInfo.is_scanned ? "var(--warning)" : "var(--success)";
+
+      const footerStatus = document.getElementById('footerStatusText');
+      if (footerStatus) {
+        footerStatus.innerText = `Page ${currentPageIndex + 1} of ${documentData.page_count} • ${pageInfo.width} × ${pageInfo.height} pt • ${pageInfo.text_blocks.length} text objects • ${pageInfo.is_scanned ? 'Scanned' : 'Clean Vector'}`;
+      }
+
+      // Update Scanned Document Alert Banner
+      const isScannedOrNoText = pageInfo.is_scanned || (pageInfo.text_blocks.length === 0 && pageInfo.images.length > 0);
+      const banner = document.getElementById('scannedAlertBanner');
+      if (banner) {
+        banner.style.display = isScannedOrNoText ? 'flex' : 'none';
+      }
+
+      // List Fonts
+      const fontsContainer = document.getElementById('pageFontsList');
+      fontsContainer.innerHTML = "";
+      if (pageInfo.fonts && pageInfo.fonts.length > 0) {
+        pageInfo.fonts.forEach(f => {
+          const div = document.createElement('div');
+          div.innerText = `• ${f.name || f.basefont} (${f.type}${f.is_embedded ? ', embedded' : ''})`;
+          fontsContainer.appendChild(div);
+        });
+      } else {
+        fontsContainer.innerText = "Standard Type1 fonts";
+      }
+
+      // 2. Load rendered image
+      const stage = document.getElementById('pageStage');
+      stage.style.width = `${pageInfo.width}px`;
+      stage.style.height = `${pageInfo.height}px`;
+
+      const img = document.getElementById('pageCanvasImg');
+      img.src = `/api/documents/${currentDocId}/pages/${currentPageIndex}/render?dpi=150&t=${Date.now()}`;
+
+      // 3. Populate Interactive Hotspot Overlay
+      const overlay = document.getElementById('overlayLayer');
+      overlay.innerHTML = "";
+
+      pageInfo.text_blocks.forEach(block => {
+        block.lines.forEach(line => {
+          line.spans.forEach(span => {
+            const [x0, y0, x1, y1] = span.bbox;
+            const w = x1 - x0;
+            const h = y1 - y0;
+
+            if (w <= 0 || h <= 0) return;
+            
+            // Skip invisible layout artifacts (giant spaces) generated by PDF creators
+            if (!span.text || span.text.trim().length === 0) return;
+
+            const spot = document.createElement('div');
+            spot.className = "text-hotspot";
+            const minSpotW = Math.max(w, 14);
+            const minSpotH = Math.max(h, 12);
+            spot.style.left = `${x0 - (minSpotW > w ? (minSpotW - w) / 2 : 0)}px`;
+            spot.style.top = `${y0 - (minSpotH > h ? (minSpotH - h) / 2 : 0)}px`;
+            spot.style.width = `${minSpotW}px`;
+            spot.style.height = `${minSpotH}px`;
+            spot.title = `Text: "${span.text}" | Font: ${span.font} ${span.size}pt`;
+
+            let currentX = x0;
+            let currentY = y0;
+
+            spot.onmousedown = (e) => {
+              e.stopPropagation();
+              
+              if (activeSpan !== span) {
+                openTextEditor(span, spot);
+              }
+              
+              let isDragging = false;
+              let startX = e.clientX;
+              let startY = e.clientY;
+              let initialLeft = parseFloat(spot.style.left) || x0;
+              let initialTop = parseFloat(spot.style.top) || y0;
+              let popover = document.getElementById('textEditorPopover');
+              let popoverInitialLeft = parseFloat(popover.style.left) || initialLeft;
+              let popoverInitialTop = parseFloat(popover.style.top) || (initialTop + h + 10);
+              
+              const onMouseMove = (mvEvent) => {
+                const dx = mvEvent.clientX - startX;
+                const dy = mvEvent.clientY - startY;
+                
+                if (!isDragging && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+                  isDragging = true;
+                  spot.style.cursor = "move";
+                }
+                
+                if (isDragging) {
+                  const newX = initialLeft + dx;
+                  const newY = initialTop + dy;
+                  
+                  spot.style.left = `${newX}px`;
+                  spot.style.top = `${newY}px`;
+                  
+                  // Update span's origin by total offset from origSpanOrigin
+                  if (origSpanOrigin) {
+                    span.origin[0] = origSpanOrigin[0] + dx;
+                    span.origin[1] = origSpanOrigin[1] + dy;
+                  }
+                  
+                  // Move popover along smoothly
+                  if (popover && popover.style.display === 'block') {
+                    const stageW = parseFloat(document.getElementById('pageStage').style.width) || 800;
+                    popover.style.left = `${Math.max(10, Math.min(popoverInitialLeft + dx, stageW - 360))}px`;
+                    popover.style.top = `${popoverInitialTop + dy}px`;
+                  }
+                }
+              };
+              
+              const onMouseUp = () => {
+                spot.style.cursor = "text";
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+              };
+              
+              document.addEventListener('mousemove', onMouseMove);
+              document.addEventListener('mouseup', onMouseUp);
+            };
+
+            overlay.appendChild(spot);
+          });
+        });
+      });
+
+      // Also render image hotspots
+      pageInfo.images.forEach(imgObj => {
+        const [ix0, iy0, ix1, iy1] = imgObj.bbox;
+        const spot = document.createElement('div');
+        spot.className = "image-hotspot";
+        spot.style.left = `${ix0}px`;
+        spot.style.top = `${iy0}px`;
+        spot.style.width = `${ix1 - ix0}px`;
+        spot.style.height = `${iy1 - iy0}px`;
+        spot.title = `Image XObject xref=${imgObj.xref} (${imgObj.width}×${imgObj.height})`;
+        spot.onclick = (e) => {
+          e.stopPropagation();
+          if (confirm(`Image object xref ${imgObj.xref}. Delete image from content stream?`)) {
+            deleteImage(imgObj.xref);
+          }
+        };
+        overlay.appendChild(spot);
+      });
+
+      // Background click on overlay
+      overlay.onclick = (e) => {
+        if (e.target !== overlay) return;
+        if (isAddTextMode) {
+          const rect = overlay.getBoundingClientRect();
+          const clickX = Math.round(e.clientX - rect.left);
+          const clickY = Math.round(e.clientY - rect.top);
+          openNewTextEditor(clickX, clickY);
+        } else {
+          closeTextEditor();
+        }
+      };
+    }
+
+    // Add Text Mode state
+    let isAddTextMode = false;
+
+    function toggleAddTextMode() {
+      isAddTextMode = !isAddTextMode;
+      const btn = document.getElementById('btnAddText');
+      const stage = document.getElementById('pageStage');
+      if (isAddTextMode) {
+        if (btn) btn.classList.add('active');
+        if (stage) stage.classList.add('mode-add-text');
+        showToast("Click anywhere on the document to add new text.");
+      } else {
+        if (btn) btn.classList.remove('active');
+        if (stage) stage.classList.remove('mode-add-text');
+      }
+    }
+
+    function dismissScannedBanner() {
+      const banner = document.getElementById('scannedAlertBanner');
+      if (banner) banner.style.display = 'none';
+    }
+
+    // Track original state to prevent accidental or redundant edits
+    let origSpanOrigin = null;
+    let origSpanText = "";
+    let origSpanFontSize = 0;
+    let origSpanFontFamily = "";
+    let origSpanColor = "";
+    let activeHotspotElem = null;
+
+    function onTextEditorInputChange() {
+      if (!activeSpan) return;
+
+      const newText = document.getElementById('editTextValue').value;
+      const fontVal = document.getElementById('editFontFamily').value;
+      const fontSize = parseFloat(document.getElementById('editFontSize').value) || activeSpan.size;
+      const hexColor = document.getElementById('editFontColor').value;
+
+      const isBold = ['hebo', 'hebi', 'tibo', 'tibi', 'cobo', 'cobi'].includes(fontVal);
+      const isItalic = ['heit', 'hebi', 'tiit', 'tibi', 'coit', 'cobi'].includes(fontVal);
+      const isSerif = ['tiro', 'tibo', 'tiit', 'tibi'].includes(fontVal);
+      const isMono = ['cour', 'cobo', 'coit', 'cobi'].includes(fontVal);
+
+      const fontFamily = isMono ? '"JetBrains Mono", Courier, monospace' : (isSerif ? '"Times New Roman", Times, serif' : 'Helvetica, Arial, sans-serif');
+
+      // Save to span draft state so moving/dragging NEVER loses typed text, font, bold, or size
+      activeSpan._draft = {
+        text: newText,
+        fontFamily: fontVal,
+        fontSize: fontSize,
+        color: hexColor,
+        isBold: isBold,
+        isItalic: isItalic
+      };
+
+      // Live visual preview on the page inside the hotspot so the user sees their bold/styled text!
+      if (activeHotspotElem) {
+        activeHotspotElem.innerText = newText;
+        activeHotspotElem.style.fontFamily = fontFamily;
+        activeHotspotElem.style.fontSize = `${fontSize}px`;
+        activeHotspotElem.style.fontWeight = isBold ? '700' : '400';
+        activeHotspotElem.style.fontStyle = isItalic ? 'italic' : 'normal';
+        activeHotspotElem.style.color = hexColor;
+        activeHotspotElem.style.backgroundColor = '#ffffff';
+        activeHotspotElem.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.35)';
+        activeHotspotElem.style.lineHeight = '1.1';
+        activeHotspotElem.style.overflow = 'visible';
+        activeHotspotElem.style.whiteSpace = 'pre';
+        activeHotspotElem.style.border = '2px solid var(--accent)';
+        activeHotspotElem.style.zIndex = '999';
+      }
+    }
+
+    // Open text editor popover at the clicked hotspot
+    function openTextEditor(span, hotspotElem) {
+      if (activeSpan === span && document.getElementById('textEditorPopover').style.display === 'block') {
+        return; // Already open for this span
+      }
+
+      activeSpan = span;
+      activeHotspotElem = hotspotElem;
+
+      if (!origSpanOrigin) {
+        origSpanOrigin = [...span.origin];
+      }
+      origSpanText = span.text || "";
+
+      // Unselect other hotspots
+      document.querySelectorAll('.text-hotspot').forEach(el => el.classList.remove('selected'));
+      hotspotElem.classList.add('selected');
+
+      const popover = document.getElementById('textEditorPopover');
+      
+      // If a draft already exists on this span, restore it! Never overwrite user's work!
+      if (span._draft) {
+        document.getElementById('editTextValue').value = span._draft.text;
+        document.getElementById('editFontSize').value = span._draft.fontSize;
+        document.getElementById('editFontFamily').value = span._draft.fontFamily;
+        document.getElementById('editFontColor').value = span._draft.color;
+        origSpanFontSize = parseFloat(span._draft.fontSize);
+        origSpanFontFamily = span._draft.fontFamily;
+        origSpanColor = span._draft.color;
+      } else {
+        document.getElementById('editTextValue').value = span.text;
+        
+        // Keep exact font size without excessive rounding
+        const fSize = Number(span.size).toFixed(1);
+        document.getElementById('editFontSize').value = fSize;
+        origSpanFontSize = parseFloat(fSize);
+
+        // Handle font family mapping with automatic bold and italic detection
+        const fontSelect = document.getElementById('editFontFamily');
+        const lowerFont = (span.font || "").toLowerCase();
+        const isBold = lowerFont.includes('bold') || (span.flags && (span.flags & 16) !== 0) || lowerFont.includes('hebo') || lowerFont.includes('tibo') || lowerFont.includes('cobo');
+        const isItalic = lowerFont.includes('italic') || lowerFont.includes('oblique') || (span.flags && (span.flags & 2) !== 0) || lowerFont.includes('heit') || lowerFont.includes('tiit') || lowerFont.includes('coit');
+        const isSerif = lowerFont.includes('time') || lowerFont.includes('serif');
+        const isMono = lowerFont.includes('couri') || lowerFont.includes('mono');
+
+        if (isSerif) {
+          if (isBold && isItalic) fontSelect.value = "tibi";
+          else if (isBold) fontSelect.value = "tibo";
+          else if (isItalic) fontSelect.value = "tiit";
+          else fontSelect.value = "tiro";
+        } else if (isMono) {
+          if (isBold && isItalic) fontSelect.value = "cobi";
+          else if (isBold) fontSelect.value = "cobo";
+          else if (isItalic) fontSelect.value = "coit";
+          else fontSelect.value = "cour";
+        } else {
+          if (isBold && isItalic) fontSelect.value = "hebi";
+          else if (isBold) fontSelect.value = "hebo";
+          else if (isItalic) fontSelect.value = "heit";
+          else fontSelect.value = "helv";
+        }
+        origSpanFontFamily = fontSelect.value;
+
+        // Color
+        if (span.color_rgb && span.color_rgb.length === 3) {
+          const r = Math.round(span.color_rgb[0] * 255).toString(16).padStart(2, '0');
+          const g = Math.round(span.color_rgb[1] * 255).toString(16).padStart(2, '0');
+          const b = Math.round(span.color_rgb[2] * 255).toString(16).padStart(2, '0');
+          origSpanColor = `#${r}${g}${b}`;
+        } else {
+          origSpanColor = '#000000';
+        }
+        document.getElementById('editFontColor').value = origSpanColor;
+      }
+
+      updateFormatButtonStates();
+      onTextEditorInputChange();
+
+      // Position popover
+      const currentSpotX = parseFloat(hotspotElem.style.left) || span.bbox[0];
+      const currentSpotY = parseFloat(hotspotElem.style.top) || span.bbox[1];
+      const currentSpotH = parseFloat(hotspotElem.style.height) || (span.bbox[3] - span.bbox[1]);
+      const stageW = parseFloat(document.getElementById('pageStage').style.width) || 800;
+
+      const popTitle = document.getElementById('popoverTitle');
+      if (popTitle) popTitle.innerText = "Direct PDF Text Object Editor";
+      const applyBtn = document.getElementById('btnApplyTextEdit');
+      if (applyBtn) applyBtn.innerText = "Apply Edit";
+      const delBtn = document.getElementById('btnDeleteText');
+      if (delBtn) delBtn.style.display = "inline-flex";
+
+      popover.style.left = `${Math.max(10, Math.min(currentSpotX, stageW - 360))}px`;
+      popover.style.top = `${currentSpotY + currentSpotH + 10}px`;
+      popover.style.display = 'block';
+      document.getElementById('editTextValue').focus();
+    }
+
+    // Open text editor to insert new text at arbitrary page coordinates
+    function openNewTextEditor(x, y) {
+      closeTextEditor();
+      if (isAddTextMode) {
+        toggleAddTextMode();
+      }
+
+      const defaultFontSize = 14.0;
+      const fakeSpan = {
+        isNewText: true,
+        text: "",
+        origin: [x, y],
+        bbox: [x, y - defaultFontSize, x + 100, y + 4],
+        size: defaultFontSize,
+        font: "helv",
+        color_rgb: [0, 0, 0]
+      };
+
+      // Create a temporary visual hotspot at insertion point
+      const spot = document.createElement('div');
+      spot.className = "text-hotspot selected";
+      spot.style.left = `${x}px`;
+      spot.style.top = `${y - defaultFontSize}px`;
+      spot.style.width = `100px`;
+      spot.style.height = `${defaultFontSize + 4}px`;
+      spot.style.border = '2px dashed #3b82f6';
+      spot.style.background = 'rgba(59, 130, 246, 0.15)';
+      document.getElementById('overlayLayer').appendChild(spot);
+
+      activeSpan = fakeSpan;
+      activeHotspotElem = spot;
+      origSpanOrigin = [x, y];
+      origSpanText = "";
+      origSpanFontSize = defaultFontSize;
+      origSpanFontFamily = "helv";
+      origSpanColor = "#000000";
+
+      const popover = document.getElementById('textEditorPopover');
+      const popoverTitle = document.getElementById('popoverTitle');
+      if (popoverTitle) popoverTitle.innerText = "Insert PDF Text Object";
+      const applyBtn = document.getElementById('btnApplyTextEdit');
+      if (applyBtn) applyBtn.innerText = "Insert Text";
+      const delBtn = document.getElementById('btnDeleteText');
+      if (delBtn) delBtn.style.display = "none";
+      
+      document.getElementById('editTextValue').value = "";
+      document.getElementById('editFontSize').value = defaultFontSize.toFixed(1);
+      document.getElementById('editFontFamily').value = "helv";
+      document.getElementById('editFontColor').value = "#000000";
+
+      updateFormatButtonStates();
+      onTextEditorInputChange();
+
+      const stageW = parseFloat(document.getElementById('pageStage').style.width) || 800;
+      popover.style.left = `${Math.max(10, Math.min(x, stageW - 360))}px`;
+      popover.style.top = `${y + 15}px`;
+      popover.style.display = 'block';
+      document.getElementById('editTextValue').focus();
+    }
+
+    // Update B and I button highlighting and textarea font styles
+    function updateFormatButtonStates() {
+      const fontSelect = document.getElementById('editFontFamily');
+      const val = fontSelect.value;
+      const isBold = ['hebo', 'hebi', 'tibo', 'tibi', 'cobo', 'cobi'].includes(val);
+      const isItalic = ['heit', 'hebi', 'tiit', 'tibi', 'coit', 'cobi'].includes(val);
+
+      const btnB = document.getElementById('btnToggleBold');
+      const btnI = document.getElementById('btnToggleItalic');
+      const textarea = document.getElementById('editTextValue');
+
+      if (btnB) {
+        if (isBold) {
+          btnB.classList.add('active');
+        } else {
+          btnB.classList.remove('active');
+        }
+      }
+      if (btnI) {
+        if (isItalic) {
+          btnI.classList.add('active');
+        } else {
+          btnI.classList.remove('active');
+        }
+      }
+
+      if (textarea) {
+        textarea.style.fontWeight = isBold ? '700' : '400';
+        textarea.style.fontStyle = isItalic ? 'italic' : 'normal';
+      }
+    }
+
+    // Toggle Bold (B) button handler
+    function toggleBold() {
+      const fontSelect = document.getElementById('editFontFamily');
+      const val = fontSelect.value;
+      const boldMap = {
+        'helv': 'hebo', 'hebo': 'helv',
+        'heit': 'hebi', 'hebi': 'heit',
+        'tiro': 'tibo', 'tibo': 'tiro',
+        'tiit': 'tibi', 'tibi': 'tiit',
+        'cour': 'cobo', 'cobo': 'cour',
+        'coit': 'cobi', 'cobi': 'coit'
+      };
+      if (boldMap[val]) {
+        fontSelect.value = boldMap[val];
+      } else {
+        if (['hebo', 'tibo', 'cobo', 'hebi', 'tibi', 'cobi'].includes(val)) {
+          fontSelect.value = 'helv';
+        } else {
+          fontSelect.value = 'hebo';
+        }
+      }
+      updateFormatButtonStates();
+      onTextEditorInputChange();
+    }
+
+    // Toggle Italic (I) button handler
+    function toggleItalic() {
+      const fontSelect = document.getElementById('editFontFamily');
+      const val = fontSelect.value;
+      const italicMap = {
+        'helv': 'heit', 'heit': 'helv',
+        'hebo': 'hebi', 'hebi': 'hebo',
+        'tiro': 'tiit', 'tiit': 'tiro',
+        'tibo': 'tibi', 'tibi': 'tibo',
+        'cour': 'coit', 'coit': 'cour',
+        'cobo': 'cobi', 'cobi': 'cobo'
+      };
+      if (italicMap[val]) {
+        fontSelect.value = italicMap[val];
+      } else {
+        if (['heit', 'tiit', 'coit', 'hebi', 'tibi', 'cobi'].includes(val)) {
+          fontSelect.value = 'helv';
+        } else {
+          fontSelect.value = 'heit';
+        }
+      }
+      updateFormatButtonStates();
+      onTextEditorInputChange();
+    }
+
+    function closeTextEditor(isCancel = false) {
+      if (activeSpan && activeSpan.isNewText && activeHotspotElem) {
+        activeHotspotElem.remove();
+      } else if (isCancel && activeSpan && origSpanOrigin) {
+        activeSpan.origin = [...origSpanOrigin];
+        if (activeHotspotElem) {
+          activeHotspotElem.style.left = `${activeSpan.bbox[0]}px`;
+          activeHotspotElem.style.top = `${activeSpan.bbox[1]}px`;
+          activeHotspotElem.innerText = '';
+          activeHotspotElem.style.background = 'transparent';
+          activeHotspotElem.style.boxShadow = 'none';
+          activeHotspotElem.style.border = '1px dashed transparent';
+        }
+        if (activeSpan) activeSpan._draft = null;
+      } else if (activeHotspotElem && !activeSpan?._draft) {
+        activeHotspotElem.innerText = '';
+        activeHotspotElem.style.background = 'transparent';
+        activeHotspotElem.style.boxShadow = 'none';
+        activeHotspotElem.style.border = '1px dashed transparent';
+      }
+
+      document.getElementById('textEditorPopover').style.display = 'none';
+      document.querySelectorAll('.text-hotspot').forEach(el => el.classList.remove('selected'));
+      activeSpan = null;
+      activeHotspotElem = null;
+      origSpanOrigin = null;
+
+      const btnB = document.getElementById('btnToggleBold');
+      const btnI = document.getElementById('btnToggleItalic');
+      if (btnB) btnB.classList.remove('active');
+      if (btnI) btnI.classList.remove('active');
+      const textarea = document.getElementById('editTextValue');
+      if (textarea) {
+        textarea.style.fontWeight = 'normal';
+        textarea.style.fontStyle = 'normal';
+      }
+    }
+
+    // Apply surgical text replacement or new text insertion
+    async function applyTextEdit() {
+      if (!activeSpan) return;
+
+      const newText = document.getElementById('editTextValue').value;
+      const fontSize = parseFloat(document.getElementById('editFontSize').value) || activeSpan.size;
+      const fontName = document.getElementById('editFontFamily').value;
+      
+      const hexColor = document.getElementById('editFontColor').value;
+      const r = parseInt(hexColor.substr(1,2), 16) / 255.0;
+      const g = parseInt(hexColor.substr(3,2), 16) / 255.0;
+      const b = parseInt(hexColor.substr(5,2), 16) / 255.0;
+
+      // New text insertion path
+      if (activeSpan.isNewText) {
+        if (!newText || !newText.trim()) {
+          closeTextEditor();
+          return;
+        }
+        showToast("Inserting genuine text object into PDF stream...");
+        try {
+          const resp = await fetch(`/api/documents/${currentDocId}/text/insert`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              page_index: currentPageIndex,
+              origin: activeSpan.origin,
+              text: newText,
+              font_name: fontName,
+              font_size: fontSize,
+              color_rgb: [r, g, b]
+            })
+          });
+
+          if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.detail || "Insert failed");
+          }
+
+          closeTextEditor();
+          showToast("✓ Text object inserted into PDF stream!");
+          await loadCurrentPage();
+        } catch (err) {
+          alert("Error inserting text: " + err.message);
+        }
+        return;
+      }
+
+      // Guard: If nothing changed, safely exit without server roundtrip or redaction
+      const originMoved = origSpanOrigin && (Math.abs(activeSpan.origin[0] - origSpanOrigin[0]) > 0.5 || Math.abs(activeSpan.origin[1] - origSpanOrigin[1]) > 0.5);
+      const textChanged = (newText !== origSpanText);
+      const sizeChanged = (Math.abs(fontSize - origSpanFontSize) > 0.1);
+      const fontChanged = (fontName !== origSpanFontFamily);
+      const colorChanged = (hexColor.toLowerCase() !== origSpanColor.toLowerCase());
+
+      if (!originMoved && !textChanged && !sizeChanged && !fontChanged && !colorChanged) {
+        closeTextEditor();
+        showToast("No changes detected.");
+        return;
+      }
+
+      showToast("Performing surgical PDF object replacement...");
+
+      try {
+        const payload = {
+          page_index: currentPageIndex,
+          bbox: activeSpan.bbox,
+          origin: activeSpan.origin,
+          new_text: newText,
+          font_name: fontName,
+          font_size: fontSize,
+          color_rgb: [r, g, b]
+        };
+
+        const resp = await fetch(`/api/documents/${currentDocId}/text/edit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.detail || "Edit failed");
+        }
+
+        closeTextEditor();
+        showToast("Text object replaced in PDF stream!");
+        await loadCurrentPage();
+      } catch (err) {
+        alert("Error applying text edit: " + err.message);
+      }
+    }
+
+    // Delete selected text
+    async function deleteSelectedText() {
+      if (!activeSpan) return;
+      if (!confirm("Surgically delete this text object from PDF content stream?")) return;
+
+      try {
+        const resp = await fetch(`/api/documents/${currentDocId}/text/delete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            page_index: currentPageIndex,
+            bbox: activeSpan.bbox,
+            origin: activeSpan.origin
+          })
+        });
+
+        if (!resp.ok) throw new Error("Delete failed");
+
+        closeTextEditor();
+        showToast("Text object eradicated from content stream.");
+        await loadCurrentPage();
+      } catch (err) {
+        alert("Delete failed: " + err.message);
+      }
+    }
+
+    // Close popover on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const popover = document.getElementById('textEditorPopover');
+        if (popover && popover.style.display === 'block') {
+          closeTextEditor(true);
+        }
+      }
+    });
+
+    // Close popover when clicking anywhere outside of popover and hotspots ONLY if no unsaved work
+    document.addEventListener('mousedown', (e) => {
+      const popover = document.getElementById('textEditorPopover');
+      if (popover && popover.style.display === 'block') {
+        if (!popover.contains(e.target) && !e.target.closest('.text-hotspot') && !e.target.closest('.image-hotspot')) {
+          const hasDraft = activeSpan && activeSpan._draft;
+          const originMoved = activeSpan && origSpanOrigin && (Math.abs(activeSpan.origin[0] - origSpanOrigin[0]) > 1 || Math.abs(activeSpan.origin[1] - origSpanOrigin[1]) > 1);
+          if (!hasDraft && !originMoved) {
+            closeTextEditor(false);
+          }
+        }
+      }
+    });
+
+    function setupPopoverDrag() {
+      const header = document.getElementById('popoverHeader');
+      const popover = document.getElementById('textEditorPopover');
+      if (!header || !popover) return;
+
+      header.addEventListener('mousedown', (e) => {
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        let startX = e.clientX;
+        let startY = e.clientY;
+        let initPopLeft = parseFloat(popover.style.left) || 0;
+        let initPopTop = parseFloat(popover.style.top) || 0;
+        let initSpotLeft = activeHotspotElem ? (parseFloat(activeHotspotElem.style.left) || 0) : 0;
+        let initSpotTop = activeHotspotElem ? (parseFloat(activeHotspotElem.style.top) || 0) : 0;
+
+        const onMove = (ev) => {
+          const dx = ev.clientX - startX;
+          const dy = ev.clientY - startY;
+
+          popover.style.left = `${initPopLeft + dx}px`;
+          popover.style.top = `${initPopTop + dy}px`;
+
+          if (activeHotspotElem && activeSpan) {
+            activeHotspotElem.style.left = `${initSpotLeft + dx}px`;
+            activeHotspotElem.style.top = `${initSpotTop + dy}px`;
+            if (origSpanOrigin) {
+              activeSpan.origin[0] = origSpanOrigin[0] + dx;
+              activeSpan.origin[1] = origSpanOrigin[1] + dy;
+            }
+          }
+        };
+
+        const onUp = () => {
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+        };
+
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+    }
+
+    // Delete image
+    async function deleteImage(xref) {
+      try {
+        const resp = await fetch(`/api/documents/${currentDocId}/images/delete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            page_index: currentPageIndex,
+            xref: xref
+          })
+        });
+        if (!resp.ok) throw new Error("Image delete failed");
+        showToast("Image XObject invocation excised from stream!");
+        await loadCurrentPage();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    // Rotate page
+    async function rotateCurrentPage(delta) {
+      try {
+        const resp = await fetch(`/api/documents/${currentDocId}/pages/rotate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            page_index: currentPageIndex,
+            rotation_delta: delta
+          })
+        });
+        if (!resp.ok) throw new Error("Rotate failed");
+        showToast(`Rotated page ${currentPageIndex + 1} by ${delta}°`);
+        renderThumbnails();
+        loadCurrentPage();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    // Run OCR
+    async function runOCR() {
+      if (!currentDocId) return;
+      const btnOcr = document.getElementById('btnOCR');
+      const bannerBtn = document.getElementById('bannerOcrBtn');
+      if (btnOcr) { btnOcr.disabled = true; btnOcr.innerText = "⏳ Running OCR..."; }
+      if (bannerBtn) { bannerBtn.disabled = true; bannerBtn.innerText = "⏳ Processing..."; }
+      showToast("Running C-native MuPDF OCR on document page...");
+      try {
+        const resp = await fetch(`/api/documents/${currentDocId}/ocr`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            page_indices: [currentPageIndex],
+            language: "eng"
+          })
+        });
+        const res = await resp.json();
+        if (!resp.ok) throw new Error(res.detail || "OCR failed");
+        showToast(res.message || "OCR completed successfully!");
+        dismissScannedBanner();
+        await loadCurrentPage();
+      } catch (err) {
+        alert("OCR error: " + err.message);
+      } finally {
+        if (btnOcr) { btnOcr.disabled = false; btnOcr.innerText = "⚡ OCR Text"; }
+        if (bannerBtn) { bannerBtn.disabled = false; bannerBtn.innerText = "Run OCR to Edit"; }
+      }
+    }
+
+    // Export PDF
+    function exportPDF(format = 'pdf') {
+      if (!currentDocId) return;
+      window.open(`/api/documents/${currentDocId}/export?format=${format}&clean_streams=true&deflate=true`, '_blank');
+      showToast(`Exporting clean ${format.toUpperCase()}...`);
+    }
+
+    // ==========================================
+    // Interactive Image Insertion & Cropping
+    // ==========================================
+
+    function triggerAddImage() {
+      if (!currentDocId) {
+        showToast("Please open a PDF document first.");
+        return;
+      }
+      document.getElementById('imagePlacementInput').click();
+    }
+
+    function handleImageSelectedForPlacement(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file (PNG, JPEG, WebP, etc.)');
+        event.target.value = '';
+        return;
+      }
+
+      currentPlacementFile = file;
+      currentPlacementBlob = file;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          originalPlacementImage = img;
+          placementAspectRatio = img.naturalWidth / img.naturalHeight;
+
+          const stage = document.getElementById('pageStage');
+          const stageW = parseFloat(stage.style.width) || 612;
+          const stageH = parseFloat(stage.style.height) || 792;
+
+          let initW = Math.min(240, stageW * 0.45);
+          let initH = initW / placementAspectRatio;
+
+          if (initH > stageH * 0.6) {
+            initH = stageH * 0.6;
+            initW = initH * placementAspectRatio;
+          }
+
+          const initX = Math.max(10, (stageW - initW) / 2);
+          const initY = Math.max(10, (stageH - initH) / 2);
+
+          const placementBox = document.getElementById('imagePlacementBox');
+          const placementImg = document.getElementById('placementImg');
+          
+          placementImg.src = e.target.result;
+          placementBox.style.width = `${initW}px`;
+          placementBox.style.height = `${initH}px`;
+          placementBox.style.left = `${initX}px`;
+          placementBox.style.top = `${initY}px`;
+          placementBox.style.display = 'block';
+
+          placementBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          showToast('Image loaded. Drag to move, handles to resize, or click Crop.');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
+
+    function cancelImagePlacement() {
+      const box = document.getElementById('imagePlacementBox');
+      if (box) box.style.display = 'none';
+      currentPlacementBlob = null;
+      currentPlacementFile = null;
+      originalPlacementImage = null;
+    }
+
+    async function applyImagePlacement() {
+      if (!currentDocId || !currentPlacementBlob) return;
+
+      const box = document.getElementById('imagePlacementBox');
+      const x0 = parseFloat(box.style.left) || 0;
+      const y0 = parseFloat(box.style.top) || 0;
+      const w = parseFloat(box.style.width) || 100;
+      const h = parseFloat(box.style.height) || 100;
+      const x1 = x0 + w;
+      const y1 = y0 + h;
+
+      showToast('Inserting native PDF Image XObject...');
+
+      const formData = new FormData();
+      formData.append('page_index', currentPageIndex);
+      formData.append('x0', x0.toFixed(2));
+      formData.append('y0', y0.toFixed(2));
+      formData.append('x1', x1.toFixed(2));
+      formData.append('y1', y1.toFixed(2));
+      formData.append('rotation_degrees', 0.0);
+      formData.append('file', currentPlacementBlob, 'placed_image.png');
+
+      try {
+        const resp = await fetch(`/api/documents/${currentDocId}/images/insert`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.detail || 'Image insertion failed');
+        }
+
+        cancelImagePlacement();
+        showToast('Image inserted successfully into PDF page!');
+        await loadCurrentPage();
+      } catch (err) {
+        alert('Error inserting image: ' + err.message);
+      }
+    }
+
+    function setupImagePlacementInteractions() {
+      const box = document.getElementById('imagePlacementBox');
+      if (!box) return;
+
+      let isDraggingBox = false;
+      let isResizing = false;
+      let resizeDir = '';
+      let startX = 0, startY = 0;
+      let initLeft = 0, initTop = 0, initW = 0, initH = 0;
+
+      box.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.resize-handle') || e.target.closest('.placement-toolbar')) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+
+        isDraggingBox = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        initLeft = parseFloat(box.style.left) || 0;
+        initTop = parseFloat(box.style.top) || 0;
+        initW = parseFloat(box.style.width) || 100;
+        initH = parseFloat(box.style.height) || 100;
+        try { box.setPointerCapture(e.pointerId); } catch (_) {}
+
+        const onPointerMove = (ev) => {
+          if (!isDraggingBox) return;
+          const dx = ev.clientX - startX;
+          const dy = ev.clientY - startY;
+
+          const stage = document.getElementById('pageStage');
+          const maxW = parseFloat(stage.style.width) || 1000;
+          const maxH = parseFloat(stage.style.height) || 1000;
+
+          let newLeft = Math.max(0, Math.min(initLeft + dx, maxW - initW));
+          let newTop = Math.max(0, Math.min(initTop + dy, maxH - initH));
+
+          box.style.left = `${newLeft}px`;
+          box.style.top = `${newTop}px`;
+        };
+
+        const onPointerUp = (ev) => {
+          isDraggingBox = false;
+          try { box.releasePointerCapture(ev.pointerId); } catch (_) {}
+          window.removeEventListener('pointermove', onPointerMove);
+          window.removeEventListener('pointerup', onPointerUp);
+        };
+
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+      });
+
+      const handles = box.querySelectorAll('.resize-handle');
+      handles.forEach(handle => {
+        handle.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          isResizing = true;
+          resizeDir = handle.getAttribute('data-dir');
+          startX = e.clientX;
+          startY = e.clientY;
+          initLeft = parseFloat(box.style.left) || 0;
+          initTop = parseFloat(box.style.top) || 0;
+          initW = parseFloat(box.style.width) || 100;
+          initH = parseFloat(box.style.height) || 100;
+          try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+
+          const onPointerMove = (ev) => {
+            if (!isResizing) return;
+            const dx = ev.clientX - startX;
+            const dy = ev.clientY - startY;
+
+            let curW = initW;
+            let curH = initH;
+            let curLeft = initLeft;
+            let curTop = initTop;
+
+            const stage = document.getElementById('pageStage');
+            const maxStageW = parseFloat(stage.style.width) || 1000;
+            const maxStageH = parseFloat(stage.style.height) || 1000;
+
+            if (resizeDir === 'se') {
+              curW = Math.max(25, initW + dx);
+              curH = curW / placementAspectRatio;
+            } else if (resizeDir === 'sw') {
+              curW = Math.max(25, initW - dx);
+              curH = curW / placementAspectRatio;
+              curLeft = initLeft + (initW - curW);
+            } else if (resizeDir === 'ne') {
+              curW = Math.max(25, initW + dx);
+              curH = curW / placementAspectRatio;
+              curTop = initTop + (initH - curH);
+            } else if (resizeDir === 'nw') {
+              curW = Math.max(25, initW - dx);
+              curH = curW / placementAspectRatio;
+              curLeft = initLeft + (initW - curW);
+              curTop = initTop + (initH - curH);
+            } else if (resizeDir === 'e') {
+              curW = Math.max(25, initW + dx);
+            } else if (resizeDir === 'w') {
+              curW = Math.max(25, initW - dx);
+              curLeft = initLeft + (initW - curW);
+            } else if (resizeDir === 's') {
+              curH = Math.max(25, initH + dy);
+            } else if (resizeDir === 'n') {
+              curH = Math.max(25, initH - dy);
+              curTop = initTop + (initH - curH);
+            }
+
+            if (curLeft < 0) {
+              curW += curLeft;
+              curLeft = 0;
+            }
+            if (curTop < 0) {
+              curH += curTop;
+              curTop = 0;
+            }
+            if (curLeft + curW > maxStageW) curW = maxStageW - curLeft;
+            if (curTop + curH > maxStageH) curH = maxStageH - curTop;
+
+            box.style.width = `${curW}px`;
+            box.style.height = `${curH}px`;
+            box.style.left = `${curLeft}px`;
+            box.style.top = `${curTop}px`;
+          };
+
+          const onPointerUp = (ev) => {
+            isResizing = false;
+            try { handle.releasePointerCapture(ev.pointerId); } catch (_) {}
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerUp);
+          };
+
+          window.addEventListener('pointermove', onPointerMove);
+          window.addEventListener('pointerup', onPointerUp);
+        });
+      });
+    }
+
+    // Crop Modal Functions
+    function openCropModal() {
+      if (!currentPlacementBlob) return;
+
+      const cropModal = document.getElementById('cropModal');
+      const cropCanvas = document.getElementById('cropCanvas');
+      const cropBox = document.getElementById('cropBox');
+
+      const img = new Image();
+      img.onload = () => {
+        activeCropImage = img;
+
+        const maxViewW = Math.min(window.innerWidth * 0.75, 680);
+        const maxViewH = Math.min(window.innerHeight * 0.65, 480);
+
+        let displayW = img.naturalWidth;
+        let displayH = img.naturalHeight;
+
+        const scale = Math.min(maxViewW / displayW, maxViewH / displayH, 1.0);
+        displayW = Math.round(displayW * scale);
+        displayH = Math.round(displayH * scale);
+
+        cropCanvasW = displayW;
+        cropCanvasH = displayH;
+
+        cropCanvas.width = displayW;
+        cropCanvas.height = displayH;
+        cropCanvas.style.width = `${displayW}px`;
+        cropCanvas.style.height = `${displayH}px`;
+
+        const ctx = cropCanvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, displayW, displayH);
+
+        const initialCropW = Math.round(displayW * 0.85);
+        const initialCropH = Math.round(displayH * 0.85);
+        const initialCropX = Math.round((displayW - initialCropW) / 2);
+        const initialCropY = Math.round((displayH - initialCropH) / 2);
+
+        cropBox.style.left = `${initialCropX}px`;
+        cropBox.style.top = `${initialCropY}px`;
+        cropBox.style.width = `${initialCropW}px`;
+        cropBox.style.height = `${initialCropH}px`;
+
+        cropModal.style.display = 'flex';
+      };
+
+      if (currentPlacementBlob instanceof Blob) {
+        img.src = URL.createObjectURL(currentPlacementBlob);
+      } else if (originalPlacementImage) {
+        img.src = originalPlacementImage.src;
+      }
+    }
+
+    function closeCropModal() {
+      document.getElementById('cropModal').style.display = 'none';
+    }
+
+    function resetCropSelection() {
+      const cropBox = document.getElementById('cropBox');
+      cropBox.style.left = '0px';
+      cropBox.style.top = '0px';
+      cropBox.style.width = `${cropCanvasW}px`;
+      cropBox.style.height = `${cropCanvasH}px`;
+    }
+
+    function confirmCrop() {
+      if (!activeCropImage || cropCanvasW === 0 || cropCanvasH === 0) return;
+
+      const cropBox = document.getElementById('cropBox');
+      const cropLeft = parseFloat(cropBox.style.left) || 0;
+      const cropTop = parseFloat(cropBox.style.top) || 0;
+      const cropW = parseFloat(cropBox.style.width) || cropCanvasW;
+      const cropH = parseFloat(cropBox.style.height) || cropCanvasH;
+
+      const scaleX = activeCropImage.naturalWidth / cropCanvasW;
+      const scaleY = activeCropImage.naturalHeight / cropCanvasH;
+
+      const sx = Math.max(0, cropLeft * scaleX);
+      const sy = Math.max(0, cropTop * scaleY);
+      const sw = Math.min(activeCropImage.naturalWidth - sx, cropW * scaleX);
+      const sh = Math.min(activeCropImage.naturalHeight - sy, cropH * scaleY);
+
+      if (sw < 5 || sh < 5) {
+        alert("Crop area is too small.");
+        return;
+      }
+
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = Math.round(sw);
+      offCanvas.height = Math.round(sh);
+      const offCtx = offCanvas.getContext('2d');
+      offCtx.drawImage(activeCropImage, sx, sy, sw, sh, 0, 0, offCanvas.width, offCanvas.height);
+
+      offCanvas.toBlob((blob) => {
+        if (!blob) return;
+        currentPlacementBlob = blob;
+
+        const newUrl = URL.createObjectURL(blob);
+        const placementImg = document.getElementById('placementImg');
+        const placementBox = document.getElementById('imagePlacementBox');
+        
+        placementImg.src = newUrl;
+
+        const curW = parseFloat(placementBox.style.width) || 200;
+        placementAspectRatio = offCanvas.width / offCanvas.height;
+        const newH = curW / placementAspectRatio;
+        placementBox.style.height = `${newH}px`;
+
+        closeCropModal();
+        showToast('Image cropped! You can resize or click "✓ Add to PDF".');
+      }, 'image/png');
+    }
+
+    function setupCropBoxInteractions() {
+      const cropBox = document.getElementById('cropBox');
+      if (!cropBox) return;
+
+      let isMoving = false;
+      let isResizing = false;
+      let handleDir = '';
+      let startX = 0, startY = 0;
+      let initLeft = 0, initTop = 0, initW = 0, initH = 0;
+
+      cropBox.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.crop-handle')) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        isMoving = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        initLeft = parseFloat(cropBox.style.left) || 0;
+        initTop = parseFloat(cropBox.style.top) || 0;
+        initW = parseFloat(cropBox.style.width) || cropCanvasW;
+        initH = parseFloat(cropBox.style.height) || cropCanvasH;
+        try { cropBox.setPointerCapture(e.pointerId); } catch (_) {}
+
+        const onMove = (ev) => {
+          if (!isMoving) return;
+          const dx = ev.clientX - startX;
+          const dy = ev.clientY - startY;
+
+          let newLeft = Math.max(0, Math.min(initLeft + dx, cropCanvasW - initW));
+          let newTop = Math.max(0, Math.min(initTop + dy, cropCanvasH - initH));
+
+          cropBox.style.left = `${newLeft}px`;
+          cropBox.style.top = `${newTop}px`;
+        };
+
+        const onUp = (ev) => {
+          isMoving = false;
+          try { cropBox.releasePointerCapture(ev.pointerId); } catch (_) {}
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+        };
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+      });
+
+      const handles = cropBox.querySelectorAll('.crop-handle');
+      handles.forEach(h => {
+        h.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          isResizing = true;
+          handleDir = h.getAttribute('data-handle');
+          startX = e.clientX;
+          startY = e.clientY;
+          initLeft = parseFloat(cropBox.style.left) || 0;
+          initTop = parseFloat(cropBox.style.top) || 0;
+          initW = parseFloat(cropBox.style.width) || cropCanvasW;
+          initH = parseFloat(cropBox.style.height) || cropCanvasH;
+          try { h.setPointerCapture(e.pointerId); } catch (_) {}
+
+          const onMove = (ev) => {
+            if (!isResizing) return;
+            const dx = ev.clientX - startX;
+            const dy = ev.clientY - startY;
+
+            let curL = initLeft;
+            let curT = initTop;
+            let curW = initW;
+            let curH = initH;
+
+            if (handleDir === 'se') {
+              curW = Math.max(20, Math.min(initW + dx, cropCanvasW - initLeft));
+              curH = Math.max(20, Math.min(initH + dy, cropCanvasH - initTop));
+            } else if (handleDir === 'sw') {
+              curW = Math.max(20, initW - dx);
+              if (initLeft + (initW - curW) < 0) {
+                curW = initLeft + initW;
+              }
+              curL = initLeft + (initW - curW);
+              curH = Math.max(20, Math.min(initH + dy, cropCanvasH - initTop));
+            } else if (handleDir === 'ne') {
+              curW = Math.max(20, Math.min(initW + dx, cropCanvasW - initLeft));
+              curH = Math.max(20, initH - dy);
+              if (initTop + (initH - curH) < 0) {
+                curH = initTop + initH;
+              }
+              curT = initTop + (initH - curH);
+            } else if (handleDir === 'nw') {
+              curW = Math.max(20, initW - dx);
+              if (initLeft + (initW - curW) < 0) {
+                curW = initLeft + initW;
+              }
+              curL = initLeft + (initW - curW);
+              curH = Math.max(20, initH - dy);
+              if (initTop + (initH - curH) < 0) {
+                curH = initTop + initH;
+              }
+              curT = initTop + (initH - curH);
+            }
+
+            cropBox.style.left = `${curL}px`;
+            cropBox.style.top = `${curT}px`;
+            cropBox.style.width = `${curW}px`;
+            cropBox.style.height = `${curH}px`;
+          };
+
+          const onUp = (ev) => {
+            isResizing = false;
+            try { h.releasePointerCapture(ev.pointerId); } catch (_) {}
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+          };
+
+          window.addEventListener('pointermove', onMove);
+          window.addEventListener('pointerup', onUp);
+        });
+      });
+    }
+
+    // Initialize interactions
+    setupImagePlacementInteractions();
+    setupCropBoxInteractions();
+    setupPopoverDrag();
+  </script>
+</body>
+</html>
