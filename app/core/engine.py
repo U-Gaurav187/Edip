@@ -30,6 +30,7 @@ from .annot_editor import RealPDFAnnotEditor
 class PDFSession:
     """
     Represents an active document session in memory with timestamp for TTL cleanup.
+    Supports in-memory page inspection and render caching, and debounced async disk persistence.
     """
     def __init__(self, doc_id: str, filename: str, doc: pymupdf.Document, file_path: Optional[Path] = None):
         self.doc_id = doc_id
@@ -38,31 +39,79 @@ class PDFSession:
         self.file_path = file_path
         self.last_accessed = time.time()
         self.lock = threading.Lock()
+        self.render_cache: Dict[Tuple[int, int, str, int], Tuple[bytes, str]] = {}
+        self.inspect_cache: Dict[int, PageInspection] = {}
+        self._save_timer: Optional[threading.Timer] = None
 
     def touch(self):
         self.last_accessed = time.time()
 
+    def invalidate_page(self, page_index: Optional[int] = None):
+        """
+        Invalidates cached render images and inspection ASTs.
+        If page_index is None, clears all page caches (e.g. on reorder or delete).
+        """
+        if page_index is None:
+            self.render_cache.clear()
+            self.inspect_cache.clear()
+        else:
+            keys_to_del = [k for k in self.render_cache if k[0] == page_index]
+            for k in keys_to_del:
+                self.render_cache.pop(k, None)
+            self.inspect_cache.pop(page_index, None)
+
+    def _flush_to_disk(self):
+        with self.lock:
+            if not self.file_path or not self.doc:
+                return
+            try:
+                if self.doc.is_closed:
+                    return
+                temp_path = self.file_path.with_suffix(".tmp")
+                self.doc.save(str(temp_path), garbage=0, deflate=False)
+                temp_path.replace(self.file_path)
+            except Exception:
+                try:
+                    if not self.doc.is_closed:
+                        temp_path = self.file_path.with_suffix(".tmp")
+                        self.doc.save(str(temp_path))
+                        temp_path.replace(self.file_path)
+                except Exception:
+                    pass
+
     def save_to_disk(self):
         """
-        Persists the current in-memory document state to disk.
-        Uses incremental save or direct-to-file saving to avoid buffering large PDFs in RAM.
-        Ensures edits survive server sleep or container restart without OOM crashes.
+        Persists current in-memory document state to disk.
+        Uses incremental save if supported to avoid full-file rewrites.
+        Otherwise schedules a debounced background thread (Timer 2.0s) so HTTP
+        edit responses return in sub-100ms.
         """
         if self.file_path and self.doc:
             try:
-                if self.doc.can_save_incrementally():
+                if not self.doc.is_closed and self.doc.can_save_incrementally():
                     self.doc.save(str(self.file_path), incremental=True, encryption=pymupdf.PDF_ENCRYPT_KEEP)
-                else:
-                    temp_path = self.file_path.with_suffix(".tmp")
-                    self.doc.save(str(temp_path), garbage=0, deflate=False)
-                    temp_path.replace(self.file_path)
+                    return
             except Exception:
+                pass
+
+            if self._save_timer is not None:
                 try:
-                    temp_path = self.file_path.with_suffix(".tmp")
-                    self.doc.save(str(temp_path))
-                    temp_path.replace(self.file_path)
+                    self._save_timer.cancel()
                 except Exception:
                     pass
+            self._save_timer = threading.Timer(2.0, self._flush_to_disk)
+            self._save_timer.daemon = True
+            self._save_timer.start()
+
+    def flush_immediate(self):
+        """Forces an immediate synchronous save (e.g. before export or close)."""
+        if self._save_timer is not None:
+            try:
+                self._save_timer.cancel()
+            except Exception:
+                pass
+            self._save_timer = None
+        self._flush_to_disk()
 
 class PDFEngineManager:
     """
@@ -123,6 +172,8 @@ class PDFEngineManager:
             session = self._sessions.pop(doc_id, None)
             if session:
                 try:
+                    if session._save_timer:
+                        session._save_timer.cancel()
                     session.doc.close()
                     if session.file_path and session.file_path.exists():
                         session.file_path.unlink(missing_ok=True)
@@ -180,7 +231,11 @@ class PDFEngineManager:
 
             pages_list: List[PageInspection] = []
             for p_idx in range(num_to_inspect):
-                page_data = self._inspect_page_internal(doc, p_idx)
+                if p_idx in session.inspect_cache:
+                    page_data = session.inspect_cache[p_idx]
+                else:
+                    page_data = self._inspect_page_internal(doc, p_idx)
+                    session.inspect_cache[p_idx] = page_data
                 pages_list.append(page_data)
 
             return DocumentInspectionResponse(
@@ -196,34 +251,40 @@ class PDFEngineManager:
         with session.lock:
             if page_index < 0 or page_index >= len(session.doc):
                 raise ValueError(f"Page index {page_index} out of bounds")
-            return self._inspect_page_internal(session.doc, page_index)
+            if page_index in session.inspect_cache:
+                return session.inspect_cache[page_index]
+            page_data = self._inspect_page_internal(session.doc, page_index)
+            session.inspect_cache[page_index] = page_data
+            return page_data
 
     def render_page_image(self, doc_id: str, page_index: int, dpi: int = 150, img_format: str = "png", quality: int = 85) -> Tuple[bytes, str]:
+        cache_key = (page_index, dpi, img_format.lower(), quality)
         session = self.get_session(doc_id)
         with session.lock:
             if page_index < 0 or page_index >= len(session.doc):
                 raise ValueError(f"Page index {page_index} out of bounds")
+            if cache_key in session.render_cache:
+                return session.render_cache[cache_key]
             page = session.doc[page_index]
             pix = page.get_pixmap(dpi=dpi, alpha=False)
             
             fmt = img_format.lower()
             if fmt in ("jpg", "jpeg"):
                 data = pix.tobytes("jpg", jpg_quality=quality)
-                pix = None
-                return data, "image/jpeg"
+                media_type = "image/jpeg"
             elif fmt == "webp":
                 try:
                     data = pix.tobytes("webp")
-                    pix = None
-                    return data, "image/webp"
+                    media_type = "image/webp"
                 except Exception:
                     data = pix.tobytes("jpg", jpg_quality=quality)
-                    pix = None
-                    return data, "image/jpeg"
+                    media_type = "image/jpeg"
             else:
                 data = pix.tobytes("png")
-                pix = None
-                return data, "image/png"
+                media_type = "image/png"
+            pix = None
+            session.render_cache[cache_key] = (data, media_type)
+            return data, media_type
 
     def _inspect_page_internal(self, doc: pymupdf.Document, page_index: int) -> PageInspection:
         page = doc[page_index]
@@ -349,8 +410,8 @@ class PDFEngineManager:
         annots_raw = RealPDFAnnotEditor.get_page_annotations(page)
         annotations = [AnnotationDetail(**a) for a in annots_raw]
 
-        # 7. Scanned detection
-        is_scanned = RealPDFOCREngine.is_page_scanned(page)
+        # 7. Scanned detection (reusing pre-extracted text_blocks and img_infos)
+        is_scanned = RealPDFOCREngine.is_page_scanned(page, text_blocks=text_blocks, img_infos=img_infos)
 
         rot_rect = page_rect.transform(rot_mat)
         p_width = round(abs(rot_rect.width), 2)

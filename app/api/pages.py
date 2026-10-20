@@ -63,6 +63,7 @@ async def reorder_pages(doc_id: str, req: PageReorderRequest):
         session = engine_manager.get_session(doc_id)
         with session.lock:
             RealPDFPageEditor.reorder_pages(session.doc, req.new_order)
+            session.invalidate_page(None)
             session.save_to_disk()
         return OperationResult(
             success=True,
@@ -84,6 +85,7 @@ async def rotate_page(doc_id: str, req: PageRotateRequest):
         session = engine_manager.get_session(doc_id)
         with session.lock:
             new_rotation = RealPDFPageEditor.rotate_page(session.doc, req.page_index, req.rotation_delta)
+            session.invalidate_page(req.page_index)
             session.save_to_disk()
         return OperationResult(
             success=True,
@@ -106,6 +108,7 @@ async def delete_pages(doc_id: str, req: PageDeleteRequest):
         session = engine_manager.get_session(doc_id)
         with session.lock:
             RealPDFPageEditor.delete_pages(session.doc, req.page_indices)
+            session.invalidate_page(None)
             session.save_to_disk()
         return OperationResult(
             success=True,
@@ -127,6 +130,7 @@ async def duplicate_page(doc_id: str, req: PageDuplicateRequest):
         session = engine_manager.get_session(doc_id)
         with session.lock:
             new_index = RealPDFPageEditor.duplicate_page(session.doc, req.page_index)
+            session.invalidate_page(None)
             session.save_to_disk()
         return OperationResult(
             success=True,
@@ -153,6 +157,7 @@ async def insert_blank_page(doc_id: str, req: PageInsertBlankRequest):
                 width=req.width,
                 height=req.height
             )
+            session.invalidate_page(None)
             session.save_to_disk()
         return OperationResult(
             success=True,

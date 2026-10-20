@@ -33,6 +33,10 @@ async def run_ocr(doc_id: str, req: OCRRequest):
                     count = RealPDFOCREngine.process_ocr_page(doc, p_idx, language=req.language)
                     spans_injected += count
                     processed_count += 1
+                    session.invalidate_page(p_idx)
+
+            if processed_count > 0:
+                session.save_to_disk()
 
         return OperationResult(
             success=True,

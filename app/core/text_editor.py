@@ -1,5 +1,8 @@
+import io
 from typing import Optional, List, Tuple
 import pymupdf
+import numpy as np
+from PIL import Image
 from .font_manager import FontManager
 
 class RealPDFTextEditor:
@@ -9,18 +12,20 @@ class RealPDFTextEditor:
     
     Principles:
     1. Text operator eradication: removes existing glyph operators from /Contents.
-    2. Background obliteration: when modifying or deleting text on scanned documents
-       or pages with raster images, applies a pixel-matched background patch
-       over the old text bounding box so the old raster characters are permanently wiped out.
-    3. Proper orientation: respects page rotation angle for accurate insertion.
-    4. 100% copy-paste fidelity and searchability.
-    5. Clean content stream consolidation.
+    2. Vector graphics preservation: never erases underlying line art or vector drawings.
+    3. Seamless background healing: when modifying or deleting text on raster images or
+       scanned documents, reconstructs the underlying background via strip interpolation
+       with median filtering to eliminate white box sticker artifacts.
+    4. Proper orientation: respects page rotation angle for accurate insertion.
+    5. 100% copy-paste fidelity and searchability.
+    6. Clean content stream consolidation.
     """
 
     @classmethod
     def sample_background_color(cls, page: pymupdf.Page, visual_bbox: List[float]) -> Tuple[float, float, float]:
         """
         Samples the local background color around the visual bounding box.
+        Uses perimeter median sampling so dark, vibrant, and light backgrounds are all accurately preserved.
         Returns RGB tuple in 0.0 - 1.0 range (defaulting to clean white).
         """
         try:
@@ -29,25 +34,131 @@ class RealPDFTextEditor:
                 return (1.0, 1.0, 1.0)
                 
             # Sample border pixels of the bounding box
-            pix = page.get_pixmap(clip=r)
+            pix = page.get_pixmap(clip=r, dpi=72)
             if pix.width == 0 or pix.height == 0:
                 return (1.0, 1.0, 1.0)
                 
-            corners = [
-                pix.pixel(0, 0),
-                pix.pixel(pix.width - 1, 0),
-                pix.pixel(0, pix.height - 1),
-                pix.pixel(pix.width - 1, pix.height - 1)
-            ]
-            
-            # Find brightest non-text pixels (text glyphs are darker than background)
-            bright_pixels = [c for c in corners if (c[0] + c[1] + c[2]) > 300]
-            if bright_pixels:
-                best = max(bright_pixels, key=lambda c: 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2])
-                return (round(best[0] / 255.0, 3), round(best[1] / 255.0, 3), round(best[2] / 255.0, 3))
+            # Perimeter pixels around the bounding box
+            perim = []
+            for x in range(pix.width):
+                perim.append(pix.pixel(x, 0))
+                if pix.height > 1:
+                    perim.append(pix.pixel(x, pix.height - 1))
+            for y in range(pix.height):
+                perim.append(pix.pixel(0, y))
+                if pix.width > 1:
+                    perim.append(pix.pixel(pix.width - 1, y))
+
+            if perim:
+                med_r = sorted(p[0] for p in perim)[len(perim) // 2]
+                med_g = sorted(p[1] for p in perim)[len(perim) // 2]
+                med_b = sorted(p[2] for p in perim)[len(perim) // 2]
+                return (round(med_r / 255.0, 3), round(med_g / 255.0, 3), round(med_b / 255.0, 3))
         except Exception:
             pass
         return (1.0, 1.0, 1.0)
+
+    @classmethod
+    def create_seamless_background_patch(cls, page: pymupdf.Page, redact_rect: pymupdf.Rect) -> Optional[bytes]:
+        """
+        Synthesizes a seamless background patch over redact_rect on raster/scanned images
+        using strip interpolation with median filtering along the outer 2px boundary ring.
+        Renders a small clip expanded by 3pt at 150 DPI and reconstructs the interior background
+        blending 80% vertical interpolation with 20% horizontal interpolation.
+        """
+        try:
+            # Expand clip by 3pt on all sides bounded by page.rect
+            expanded_rect = pymupdf.Rect(
+                redact_rect.x0 - 3.0,
+                redact_rect.y0 - 3.0,
+                redact_rect.x1 + 3.0,
+                redact_rect.y1 + 3.0
+            ).intersect(page.rect)
+
+            if expanded_rect.width <= 0 or expanded_rect.height <= 0:
+                return None
+
+            dpi = 150
+            clip_pix = page.get_pixmap(clip=expanded_rect, dpi=dpi)
+            if clip_pix.width < 3 or clip_pix.height < 3:
+                return None
+
+            clip_arr = np.frombuffer(clip_pix.samples, dtype=np.uint8).reshape((clip_pix.height, clip_pix.width, clip_pix.n))
+            if clip_pix.n > 3:
+                clip_arr = clip_arr[:, :, :3]  # drop alpha if any
+
+            scale_x = clip_pix.width / expanded_rect.width
+            scale_y = clip_pix.height / expanded_rect.height
+
+            # Coordinates of redact_rect relative to expanded clip
+            ix0 = max(0, min(int(round((redact_rect.x0 - expanded_rect.x0) * scale_x)), clip_pix.width - 1))
+            iy0 = max(0, min(int(round((redact_rect.y0 - expanded_rect.y0) * scale_y)), clip_pix.height - 1))
+            ix1 = max(ix0 + 1, min(int(round((redact_rect.x1 - expanded_rect.x0) * scale_x)), clip_pix.width))
+            iy1 = max(iy0 + 1, min(int(round((redact_rect.y1 - expanded_rect.y0) * scale_y)), clip_pix.height))
+
+            patch_w = ix1 - ix0
+            patch_h = iy1 - iy0
+            if patch_w <= 0 or patch_h <= 0:
+                return None
+
+            # Outer ring 2px border strips
+            top_strip = clip_arr[max(0, iy0 - 2):iy0, ix0:ix1]
+            bot_strip = clip_arr[iy1:min(clip_pix.height, iy1 + 2), ix0:ix1]
+            left_strip = clip_arr[iy0:iy1, max(0, ix0 - 2):ix0]
+            right_strip = clip_arr[iy0:iy1, ix1:min(clip_pix.width, ix1 + 2)]
+
+            # Top profile (median along axis 0)
+            if top_strip.shape[0] > 0:
+                top_profile = np.median(top_strip, axis=0)
+            elif bot_strip.shape[0] > 0:
+                top_profile = np.median(bot_strip, axis=0)
+            else:
+                top_profile = np.full((patch_w, 3), 255.0)
+
+            # Bottom profile
+            if bot_strip.shape[0] > 0:
+                bot_profile = np.median(bot_strip, axis=0)
+            else:
+                bot_profile = top_profile
+
+            # Left profile (median along axis 1)
+            if left_strip.shape[1] > 0:
+                left_profile = np.median(left_strip, axis=1)
+            elif right_strip.shape[1] > 0:
+                left_profile = np.median(right_strip, axis=1)
+            else:
+                left_profile = np.full((patch_h, 3), 255.0)
+
+            # Right profile
+            if right_strip.shape[1] > 0:
+                right_profile = np.median(right_strip, axis=1)
+            else:
+                right_profile = left_profile
+
+            # Vertical linear interpolation
+            if patch_h > 1:
+                v_weights = np.linspace(0.0, 1.0, patch_h, dtype=np.float32)[:, None, None]
+            else:
+                v_weights = np.zeros((1, 1, 1), dtype=np.float32)
+            v_interp = (1.0 - v_weights) * top_profile[None, :, :] + v_weights * bot_profile[None, :, :]
+
+            # Horizontal linear interpolation
+            if patch_w > 1:
+                h_weights = np.linspace(0.0, 1.0, patch_w, dtype=np.float32)[None, :, None]
+            else:
+                h_weights = np.zeros((1, 1, 1), dtype=np.float32)
+            h_interp = (1.0 - h_weights) * left_profile[:, None, :] + h_weights * right_profile[:, None, :]
+
+            # Blend 80% vertical and 20% horizontal
+            blended = 0.8 * v_interp + 0.2 * h_interp
+            blended_uint8 = np.clip(np.round(blended), 0, 255).astype(np.uint8)
+
+            patch_img = Image.fromarray(blended_uint8, "RGB")
+            buf = io.BytesIO()
+            patch_img.save(buf, format="PNG")
+            return buf.getvalue()
+        except Exception:
+            return None
 
     @classmethod
     def compute_safe_redact_rect(
@@ -81,14 +192,11 @@ class RealPDFTextEditor:
         font_size = max(origin_y - r_bbox.y0, 6.0)
         
         # Start with safe bounding box around target ink.
-        # On raster/scanned documents or pages with images, OCR bounding boxes commonly
-        # truncate character serifs, italic overhangs, and underlying title underlines
-        # by 3 to 6 points. We dynamically scale padding based on typography font size
-        # while lines below strictly guard against any neighbor-word or neighbor-line collisions.
+        # Tight surgical margins prevent clipping adjacent punctuation, table gridlines, or lines.
         is_raster_page = len(page.get_images()) > 0
-        pad_x = max(5.5, min(font_size * 0.35, 8.0)) if is_raster_page else 0.5
-        pad_y_top = max(2.5, min(font_size * 0.15, 4.0)) if is_raster_page else 0.5
-        pad_y_bot = max(3.0, min(font_size * 0.20, 6.0)) if is_raster_page else 0.5
+        pad_x = max(1.5, min(font_size * 0.12, 3.0)) if is_raster_page else 0.5
+        pad_y_top = 1.5 if is_raster_page else 0.5
+        pad_y_bot = 2.0 if is_raster_page else 0.5
         
         safe_x0 = max(0.0, r_bbox.x0 - pad_x)
         safe_x1 = min(page.rect.width, r_bbox.x1 + pad_x)
@@ -160,8 +268,9 @@ class RealPDFTextEditor:
     ) -> bool:
         """
         Replaces text in a PDF page.
-        Eradicates old text operators, covers underlying raster/scanned pixels with
-        a matching background patch, and inserts the new compliant text object.
+        Eradicates old text operators without white boxes, preserves underlying vector graphics,
+        covers underlying raster pixels with a seamless interpolated background patch if on an image,
+        and inserts the new compliant text object.
         """
         if page_index < 0 or page_index >= len(doc):
             raise ValueError(f"Page index {page_index} out of bounds (total pages: {len(doc)})")
@@ -176,12 +285,23 @@ class RealPDFTextEditor:
         redact_rect = cls.compute_safe_redact_rect(page, bbox, origin)
         
         # 1. Add redaction annotation and apply to eradicate vector text operators
+        # Always protect line art / vector shapes and avoid wiping out whole images
         page.add_redact_annot(redact_rect, fill=False)
-        page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
+        page.apply_redactions(
+            images=pymupdf.PDF_REDACT_IMAGE_NONE,
+            graphics=pymupdf.PDF_REDACT_LINE_ART_NONE
+        )
         
-        # 2. If page contains images or is scanned, apply background patch to obliterate scanned/raster glyphs
-        if len(page.get_images()) > 0:
+        # 2. Only apply a raster background patch when redact_rect actually intersects an image bbox on the page
+        has_intersecting_image = any(
+            pymupdf.Rect(img.get("bbox", [0, 0, 0, 0])).intersects(redact_rect)
+            for img in page.get_image_info()
+        )
+        if has_intersecting_image:
+            patch_png = cls.create_seamless_background_patch(page, redact_rect)
             page.draw_rect(redact_rect, color=None, fill=bg_color, overlay=True)
+            if patch_png:
+                page.insert_image(redact_rect, stream=patch_png, overlay=True)
         
         # 3. If new_text is empty or whitespace, this was a deletion
         if not new_text or not new_text.strip():
@@ -225,7 +345,8 @@ class RealPDFTextEditor:
     ) -> bool:
         """
         Eradicates text inside the bounding box from content stream and conceals
-        underlying raster pixels with a clean matching background patch.
+        underlying raster pixels with a clean seamless background patch if on an image.
+        Never erases vector graphics.
         """
         if page_index < 0 or page_index >= len(doc):
             raise ValueError(f"Page index {page_index} out of bounds")
@@ -235,11 +356,21 @@ class RealPDFTextEditor:
         
         redact_rect = cls.compute_safe_redact_rect(page, bbox, origin)
         page.add_redact_annot(redact_rect, fill=False)
-        page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
+        page.apply_redactions(
+            images=pymupdf.PDF_REDACT_IMAGE_NONE,
+            graphics=pymupdf.PDF_REDACT_LINE_ART_NONE
+        )
         
-        # Obliterate old raster/scanned glyphs if page contains images
-        if len(page.get_images()) > 0:
+        # Only apply raster background patch when redact_rect actually intersects an image bbox on the page
+        has_intersecting_image = any(
+            pymupdf.Rect(img.get("bbox", [0, 0, 0, 0])).intersects(redact_rect)
+            for img in page.get_image_info()
+        )
+        if has_intersecting_image:
+            patch_png = cls.create_seamless_background_patch(page, redact_rect)
             page.draw_rect(redact_rect, color=None, fill=bg_color, overlay=True)
+            if patch_png:
+                page.insert_image(redact_rect, stream=patch_png, overlay=True)
         
         page.clean_contents()
         return True

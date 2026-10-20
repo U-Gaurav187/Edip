@@ -42,6 +42,7 @@ async def transform_image(doc_id: str, req: ImageTransformRequest):
                 new_bbox=req.new_bbox,
                 rotation_degrees=req.rotation_degrees
             )
+            session.invalidate_page(req.page_index)
             session.save_to_disk()
         return engine_manager.inspect_page(doc_id, req.page_index)
     except KeyError:
@@ -70,6 +71,7 @@ async def replace_image(
                 xref=xref,
                 new_image_bytes=new_bytes
             )
+            session.invalidate_page(page_index)
             session.save_to_disk()
         return engine_manager.inspect_page(doc_id, page_index)
     except KeyError:
@@ -90,6 +92,7 @@ async def delete_image(doc_id: str, req: ImageDeleteRequest):
                 page_index=req.page_index,
                 xref=req.xref
             )
+            session.invalidate_page(req.page_index)
             session.save_to_disk()
         return engine_manager.inspect_page(doc_id, req.page_index)
     except KeyError:
@@ -123,6 +126,7 @@ async def insert_image(
                 bbox=[x0, y0, x1, y1],
                 rotation_degrees=rotation_degrees
             )
+            session.invalidate_page(page_index)
             session.save_to_disk()
         return engine_manager.inspect_page(doc_id, page_index)
     except KeyError:

@@ -514,8 +514,14 @@
       font-size: 13px;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.2s ease;
+      transform: translateY(10px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
       z-index: 1000;
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateY(0);
     }
 
     /* Image Placement & Resizing Box */
@@ -791,7 +797,7 @@
     <!-- Central Viewport -->
     <div class="viewport" id="viewport">
       <div class="empty-state" id="emptyState">
-        <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+        <div class="upload-box" id="uploadBox" onclick="document.getElementById('fileInput').click()">
           <div class="upload-icon">📄</div>
           <h2 style="margin-bottom: 8px;">Open a PDF or Document Photo to Edit</h2>
           <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
@@ -800,6 +806,21 @@
           <button class="btn btn-primary">Browse File (PDF / Image)</button>
           <div style="margin-top: 24px; font-size: 13px; color: var(--text-muted); font-weight: 500;">
             Made by <span style="color: #f1f5f9; font-weight: 600;">Gaurav</span>
+          </div>
+        </div>
+
+        <!-- Live Upload Streaming Progress Card -->
+        <div id="uploadProgressCard" style="display: none; width: 100%; max-width: 480px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: left;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div id="uploadFileName" style="font-weight: 600; font-size: 14px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px;">document.pdf</div>
+            <div id="uploadPercent" style="font-weight: 700; font-size: 14px; color: var(--accent);">0%</div>
+          </div>
+          <div style="width: 100%; height: 8px; background: var(--bg-main); border-radius: 4px; overflow: hidden; margin-bottom: 12px; border: 1px solid var(--border-color);">
+            <div id="uploadProgressBarFill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.15s ease;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted);">
+            <span id="uploadStatusText">Uploading to server...</span>
+            <span id="uploadSizeDetail">0.0 MB / 0.0 MB</span>
           </div>
         </div>
       </div>
@@ -823,7 +844,7 @@
         <div id="stageLoadingOverlay" class="stage-loading-overlay" style="display: none;">
           <div class="stage-skeleton-card">
             <div class="stage-progress-bar">
-              <div class="stage-progress-fill"></div>
+              <div id="stageProgressFill" class="stage-progress-fill"></div>
             </div>
             <div id="stageLoadingText" class="stage-loading-text">Loading Page 1...</div>
           </div>
@@ -1016,7 +1037,7 @@
       setTimeout(() => toast.classList.remove('show'), 3500);
     }
 
-    // File selection
+    // File selection with live streaming progress bar (Upgrade 1)
     async function handleFileSelected(event) {
       const fileInput = event.target;
       const file = fileInput.files[0];
@@ -1040,38 +1061,96 @@
         return;
       }
 
-      showToast('Uploading & parsing PDF objects...');
+      const emptyState = document.getElementById('emptyState');
+      const uploadBox = document.getElementById('uploadBox');
+      const uploadProgressCard = document.getElementById('uploadProgressCard');
+      const uploadFileName = document.getElementById('uploadFileName');
+      const uploadPercent = document.getElementById('uploadPercent');
+      const uploadProgressBarFill = document.getElementById('uploadProgressBarFill');
+      const uploadStatusText = document.getElementById('uploadStatusText');
+      const uploadSizeDetail = document.getElementById('uploadSizeDetail');
+
+      const stageOverlay = document.getElementById('stageLoadingOverlay');
+      const stageText = document.getElementById('stageLoadingText');
+      const stageProgressFill = document.getElementById('stageProgressFill');
+
+      const totalMb = (file.size / (1024 * 1024)).toFixed(1);
+
+      if (emptyState && emptyState.style.display !== 'none') {
+        if (uploadBox) uploadBox.style.display = 'none';
+        if (uploadProgressCard) {
+          uploadProgressCard.style.display = 'block';
+          if (uploadFileName) uploadFileName.innerText = file.name;
+          if (uploadPercent) uploadPercent.innerText = '0%';
+          if (uploadProgressBarFill) uploadProgressBarFill.style.width = '0%';
+          if (uploadStatusText) uploadStatusText.innerText = 'Uploading to server...';
+          if (uploadSizeDetail) uploadSizeDetail.innerText = `0.0 MB / ${totalMb} MB`;
+        }
+      } else if (stageOverlay) {
+        stageOverlay.style.display = 'flex';
+        if (stageText) stageText.innerText = `Uploading ${file.name}... 0% (0.0/${totalMb} MB)`;
+        if (stageProgressFill) stageProgressFill.style.width = '0%';
+      }
+
+      showToast(`Uploading ${file.name}...`);
 
       const formData = new FormData();
       formData.append('file', file, file.name);
 
       try {
-        const resp = await fetch('/api/documents/upload', {
-          method: 'POST',
-          body: formData
+        const responseData = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/documents/upload');
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const percent = Math.min(100, Math.round((e.loaded / e.total) * 100));
+              const loadedMb = (e.loaded / (1024 * 1024)).toFixed(1);
+
+              if (uploadPercent) uploadPercent.innerText = `${percent}%`;
+              if (uploadProgressBarFill) uploadProgressBarFill.style.width = `${percent}%`;
+              if (uploadSizeDetail) uploadSizeDetail.innerText = `${loadedMb} MB / ${totalMb} MB`;
+
+              if (percent >= 100) {
+                if (uploadStatusText) uploadStatusText.innerText = "Indexing PDF AST & rendering Page 1...";
+                if (stageText) stageText.innerText = "Indexing PDF AST & rendering Page 1...";
+                if (stageProgressFill) stageProgressFill.style.width = '100%';
+              } else {
+                if (uploadStatusText) uploadStatusText.innerText = 'Uploading to server...';
+                if (stageText) stageText.innerText = `Uploading ${file.name}... ${percent}% (${loadedMb}/${totalMb} MB)`;
+                if (stageProgressFill) stageProgressFill.style.width = `${percent}%`;
+              }
+            }
+          };
+
+          xhr.onload = () => {
+            let resJson;
+            try {
+              resJson = JSON.parse(xhr.responseText);
+            } catch (_) {
+              resJson = null;
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300 && resJson) {
+              resolve(resJson);
+            } else {
+              const errDetail = resJson && resJson.detail ? resJson.detail : (xhr.responseText ? xhr.responseText.slice(0, 150) : `Upload failed with HTTP ${xhr.status}`);
+              reject(new Error(errDetail));
+            }
+          };
+
+          xhr.onerror = () => {
+            reject(new Error("Network error during document upload."));
+          };
+
+          xhr.ontimeout = () => {
+            reject(new Error("Upload timed out."));
+          };
+
+          xhr.send(formData);
         });
 
-        let responseBody;
-        const contentType = resp.headers.get("content-type") || "";
-        if (contentType.includes("application/json")) {
-          responseBody = await resp.json();
-        } else {
-          const text = await resp.text();
-          if (!resp.ok) {
-            if (resp.status === 502 || resp.status === 504) {
-              throw new Error("Server temporarily timed out or ran out of memory processing this large file (502 Bad Gateway). Please retry uploading now with the updated streaming engine.");
-            }
-            throw new Error(`Server error (${resp.status}): ${text.slice(0, 150)}`);
-          }
-          throw new Error("Invalid response from server: " + text.slice(0, 150));
-        }
-
-        if (!resp.ok) {
-          const detail = responseBody.detail || JSON.stringify(responseBody);
-          throw new Error(detail);
-        }
-
-        documentData = responseBody;
+        documentData = responseData;
         currentDocId = documentData.document_id;
         currentPageIndex = 0;
 
@@ -1086,12 +1165,21 @@
         document.getElementById('metaEncrypted').innerText = documentData.metadata.is_encrypted ? 'Yes' : 'No';
         document.getElementById('metaPDFA').innerText = documentData.metadata.is_pdfa ? 'Yes' : 'No';
 
+        // Upgrade 1: Zero-contention initial load
+        // Pass preloaded Page 0 inspection returned by upload to skip redundant GET /pages/0/inspect
+        const preloadedP0 = (documentData.pages && documentData.pages.length > 0) ? documentData.pages[0] : null;
+        await loadCurrentPage({ preloadedPageInfo: preloadedP0 });
+
+        // Delay setupThumbnails until AFTER loadCurrentPage finishes mounting Page 0's main stage image
         setupThumbnails();
-        loadCurrentPage();
-        showToast('PDF parsed successfully - ' + documentData.page_count + ' page(s) loaded!');
+
+        showToast('✓ PDF parsed successfully - ' + documentData.page_count + ' page(s) loaded!');
       } catch (err) {
         console.error('Upload failed:', err);
         alert('Upload error: ' + err.message);
+        if (uploadProgressCard) uploadProgressCard.style.display = 'none';
+        if (uploadBox) uploadBox.style.display = 'block';
+        if (stageOverlay) stageOverlay.style.display = 'none';
       } finally {
         fileInput.value = '';
       }
@@ -1269,8 +1357,8 @@
       if (currentPageIndex < documentData.page_count - 1) switchPage(currentPageIndex + 1);
     }
 
-    // Load active page display & interactive overlay with progress bar
-    async function loadCurrentPage() {
+    // Load active page display & interactive overlay with silent update option (Upgrade 3)
+    async function loadCurrentPage({ silent = false, preloadedPageInfo = null } = {}) {
       closeTextEditor();
       cancelImagePlacement();
       document.getElementById('pageCounter').innerText = `Page ${currentPageIndex + 1} / ${documentData.page_count}`;
@@ -1282,10 +1370,10 @@
       currentStageAbortController = new AbortController();
       const signal = currentStageAbortController.signal;
 
-      // Show stage loading overlay immediately with skeleton progress bar
+      // Show stage loading overlay only when not silent
       const overlaySpinner = document.getElementById('stageLoadingOverlay');
       const stageText = document.getElementById('stageLoadingText');
-      if (overlaySpinner) {
+      if (overlaySpinner && !silent) {
         overlaySpinner.style.display = 'flex';
         if (stageText) stageText.innerText = `Loading Page ${currentPageIndex + 1}...`;
       }
@@ -1295,31 +1383,50 @@
 
       try {
         const v = pageCacheVersion[currentPageIndex] || 0;
-        const renderUrl = `/api/documents/${currentDocId}/pages/${currentPageIndex}/render?dpi=150&format=jpeg&quality=85&v=${v}`;
+        const renderUrl = `/api/documents/${currentDocId}/pages/${currentPageIndex}/render?dpi=150&format=jpeg&quality=88&v=${v}`;
 
-        // Fetch inspection and fast JPEG render blob with automatic single retry
-        let inspResp, renderBlob;
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            [inspResp, renderBlob] = await Promise.all([
-              fetch(`/api/documents/${currentDocId}/pages/${currentPageIndex}/inspect`, { signal }),
-              fetch(renderUrl, { signal }).then(r => {
-                if (!r.ok) throw new Error(`Render status ${r.status}`);
-                return r.blob();
-              })
-            ]);
-            if (inspResp.ok) break;
-          } catch (e) {
-            if (signal.aborted) return;
-            if (attempt === 0) {
-              await new Promise(r => setTimeout(r, 350));
-            } else {
-              throw e;
+        let pageInfo = preloadedPageInfo;
+        let renderBlob = null;
+
+        if (pageInfo) {
+          // Preloaded AST available: fetch only the render image without inspect roundtrip!
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              const r = await fetch(renderUrl, { signal });
+              if (!r.ok) throw new Error(`Render status ${r.status}`);
+              renderBlob = await r.blob();
+              break;
+            } catch (e) {
+              if (signal.aborted) return;
+              if (attempt === 0) await new Promise(res => setTimeout(res, 250));
+              else throw e;
             }
+          }
+        } else {
+          // Fetch inspection and fast JPEG render blob in parallel
+          let inspResp;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              [inspResp, renderBlob] = await Promise.all([
+                fetch(`/api/documents/${currentDocId}/pages/${currentPageIndex}/inspect`, { signal }),
+                fetch(renderUrl, { signal }).then(r => {
+                  if (!r.ok) throw new Error(`Render status ${r.status}`);
+                  return r.blob();
+                })
+              ]);
+              if (inspResp && inspResp.ok) break;
+            } catch (e) {
+              if (signal.aborted) return;
+              if (attempt === 0) await new Promise(res => setTimeout(res, 250));
+              else throw e;
+            }
+          }
+          if (inspResp && inspResp.ok) {
+            pageInfo = await inspResp.json();
           }
         }
 
-        const pageInfo = await inspResp.json();
+        if (!pageInfo || !renderBlob) return;
 
         // Update Inspector panel
         document.getElementById('pageDimensions').innerText = `${pageInfo.width} × ${pageInfo.height} pt`;
@@ -1355,29 +1462,30 @@
           fontsContainer.innerText = "Standard Type1 fonts";
         }
 
-        // Set stage dimensions
-        stage.style.width = `${pageInfo.width}px`;
-        stage.style.height = `${pageInfo.height}px`;
-
-        // Mount rendered image
-        const img = document.getElementById('pageCanvasImg');
+        // Decode render image offscreen before swapping into DOM to eliminate flicker
         const objectUrl = URL.createObjectURL(renderBlob);
-        await new Promise((resolve) => {
-          img.onload = () => resolve();
-          img.onerror = () => resolve();
-          img.src = objectUrl;
+        const offscreenImg = new Image();
+        offscreenImg.src = objectUrl;
+        try {
+          if (offscreenImg.decode) {
+            await offscreenImg.decode();
+          } else {
+            await new Promise(r => { offscreenImg.onload = r; offscreenImg.onerror = r; });
+          }
+        } catch (_) {}
+
+        // Swap image and populate overlay in a single animation frame
+        requestAnimationFrame(() => {
+          stage.style.width = `${pageInfo.width}px`;
+          stage.style.height = `${pageInfo.height}px`;
+          const imgElem = document.getElementById('pageCanvasImg');
+          imgElem.src = objectUrl;
+          if (overlaySpinner) overlaySpinner.style.display = 'none';
+          populateOverlay(pageInfo);
         });
 
-        // Hide overlay skeleton progress bar
-        if (overlaySpinner) overlaySpinner.style.display = 'none';
-
-        // Populate Interactive Hotspot Overlay
-        populateOverlay(pageInfo);
-
       } catch (err) {
-        if (err.name === 'AbortError') {
-          return;
-        }
+        if (err.name === 'AbortError') return;
         console.error('Error loading page:', err);
         if (overlaySpinner) overlaySpinner.style.display = 'none';
         showToast('Error loading page: ' + err.message);
@@ -1564,7 +1672,7 @@
         isItalic: isItalic
       };
 
-      // Live visual preview on the page inside the hotspot so the user sees their bold/styled text!
+      // Live visual preview on the page inside the hotspot with adaptive contrast (Upgrade 6)
       if (activeHotspotElem) {
         activeHotspotElem.innerText = newText;
         activeHotspotElem.style.fontFamily = fontFamily;
@@ -1572,13 +1680,32 @@
         activeHotspotElem.style.fontWeight = isBold ? '700' : '400';
         activeHotspotElem.style.fontStyle = isItalic ? 'italic' : 'normal';
         activeHotspotElem.style.color = hexColor;
-        activeHotspotElem.style.backgroundColor = '#ffffff';
+
+        // Adaptive contrast based on relative luminance of text color
+        const rVal = (parseInt(hexColor.substr(1,2), 16) || 0) / 255.0;
+        const gVal = (parseInt(hexColor.substr(3,2), 16) || 0) / 255.0;
+        const bVal = (parseInt(hexColor.substr(5,2), 16) || 0) / 255.0;
+        const lum = 0.299 * rVal + 0.587 * gVal + 0.114 * bVal;
+        if (lum > 0.75) {
+          activeHotspotElem.style.backgroundColor = 'rgba(15, 23, 42, 0.92)'; // Dark slate for light/white text
+        } else {
+          activeHotspotElem.style.backgroundColor = '#ffffff';
+        }
+
         activeHotspotElem.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.35)';
         activeHotspotElem.style.lineHeight = '1.1';
         activeHotspotElem.style.overflow = 'visible';
         activeHotspotElem.style.whiteSpace = 'pre';
         activeHotspotElem.style.border = '2px solid var(--accent)';
         activeHotspotElem.style.zIndex = '999';
+
+        // Ensure hotspot aligns minWidth to original span bbox width and preserves spacing
+        if (activeSpan && activeSpan.bbox) {
+          const origW = activeSpan.bbox[2] - activeSpan.bbox[0];
+          if (origW > 0) {
+            activeHotspotElem.style.minWidth = `${origW}px`;
+          }
+        }
       }
     }
 
@@ -1859,7 +1986,7 @@
       }
     }
 
-    // Apply surgical text replacement or new text insertion
+    // Apply surgical text replacement or new text insertion (Upgrade 3)
     async function applyTextEdit() {
       if (!activeSpan) return;
 
@@ -1872,12 +1999,16 @@
       const g = parseInt(hexColor.substr(3,2), 16) / 255.0;
       const b = parseInt(hexColor.substr(5,2), 16) / 255.0;
 
+      const btn = document.getElementById('btnApplyTextEdit');
+      const origBtnText = btn ? btn.innerText : 'Apply Edit';
+
       // New text insertion path
       if (activeSpan.isNewText) {
         if (!newText || !newText.trim()) {
           closeTextEditor();
           return;
         }
+        if (btn) { btn.innerText = "Saving..."; btn.disabled = true; }
         showToast("Inserting genuine text object into PDF stream...");
         try {
           const resp = await fetch(`/api/documents/${currentDocId}/text/insert`, {
@@ -1905,12 +2036,15 @@
             throw new Error(errMsg);
           }
 
+          const updatedPageInfo = await resp.json();
           closeTextEditor();
           showToast("✓ Text object inserted into PDF stream!");
           invalidatePageCache(currentPageIndex);
-          await loadCurrentPage();
+          await loadCurrentPage({ silent: true, preloadedPageInfo: updatedPageInfo });
         } catch (err) {
           alert("Error inserting text: " + err.message);
+        } finally {
+          if (btn) { btn.innerText = origBtnText; btn.disabled = false; }
         }
         return;
       }
@@ -1928,6 +2062,7 @@
         return;
       }
 
+      if (btn) { btn.innerText = "Saving..."; btn.disabled = true; }
       showToast("Performing surgical PDF object replacement...");
 
       try {
@@ -1959,19 +2094,26 @@
           throw new Error(errMsg);
         }
 
+        const updatedPageInfo = await resp.json();
         closeTextEditor();
         showToast("Text object replaced in PDF stream!");
         invalidatePageCache(currentPageIndex);
-        await loadCurrentPage();
+        await loadCurrentPage({ silent: true, preloadedPageInfo: updatedPageInfo });
       } catch (err) {
         alert("Error applying text edit: " + err.message);
+      } finally {
+        if (btn) { btn.innerText = origBtnText; btn.disabled = false; }
       }
     }
 
-    // Delete selected text
+    // Delete selected text (Upgrade 3)
     async function deleteSelectedText() {
       if (!activeSpan) return;
       if (!confirm("Surgically delete this text object from PDF content stream?")) return;
+
+      const btn = document.getElementById('btnDeleteText');
+      const origBtnText = btn ? btn.innerText : 'Delete';
+      if (btn) { btn.innerText = "Deleting..."; btn.disabled = true; }
 
       try {
         const resp = await fetch(`/api/documents/${currentDocId}/text/delete`, {
@@ -1996,12 +2138,15 @@
           throw new Error(errMsg);
         }
 
+        const updatedPageInfo = await resp.json();
         closeTextEditor();
         showToast("Text object eradicated from content stream.");
         invalidatePageCache(currentPageIndex);
-        await loadCurrentPage();
+        await loadCurrentPage({ silent: true, preloadedPageInfo: updatedPageInfo });
       } catch (err) {
         alert("Delete failed: " + err.message);
+      } finally {
+        if (btn) { btn.innerText = origBtnText; btn.disabled = false; }
       }
     }
 
@@ -2073,8 +2218,9 @@
       });
     }
 
-    // Delete image
+    // Delete image (Upgrade 3)
     async function deleteImage(xref) {
+      showToast("Deleting image object...");
       try {
         const resp = await fetch(`/api/documents/${currentDocId}/images/delete`, {
           method: "POST",
@@ -2085,16 +2231,18 @@
           })
         });
         if (!resp.ok) throw new Error("Image delete failed");
+        const updatedPageInfo = await resp.json();
         showToast("Image XObject invocation excised from stream!");
         invalidatePageCache(currentPageIndex);
-        await loadCurrentPage();
+        await loadCurrentPage({ silent: true, preloadedPageInfo: updatedPageInfo });
       } catch (err) {
         alert(err.message);
       }
     }
 
-    // Rotate page
+    // Rotate page (Upgrade 3)
     async function rotateCurrentPage(delta) {
+      showToast(`Rotating page ${currentPageIndex + 1} by ${delta}°...`);
       try {
         const resp = await fetch(`/api/documents/${currentDocId}/pages/rotate`, {
           method: "POST",
@@ -2107,7 +2255,7 @@
         if (!resp.ok) throw new Error("Rotate failed");
         showToast(`Rotated page ${currentPageIndex + 1} by ${delta}°`);
         invalidatePageCache(currentPageIndex);
-        await loadCurrentPage();
+        await loadCurrentPage({ silent: true });
       } catch (err) {
         alert(err.message);
       }
@@ -2236,6 +2384,10 @@
       const x1 = x0 + w;
       const y1 = y0 + h;
 
+      const btn = document.querySelector('#imagePlacementBox .btn-success');
+      const origBtnText = btn ? btn.innerText : '✓ Add to PDF';
+      if (btn) { btn.innerText = "Saving..."; btn.disabled = true; }
+
       showToast('Inserting native PDF Image XObject...');
 
       const formData = new FormData();
@@ -2258,12 +2410,15 @@
           throw new Error(err.detail || 'Image insertion failed');
         }
 
+        const updatedPageInfo = await resp.json();
         cancelImagePlacement();
         showToast('Image inserted successfully into PDF page!');
         invalidatePageCache(currentPageIndex);
-        await loadCurrentPage();
+        await loadCurrentPage({ silent: true, preloadedPageInfo: updatedPageInfo });
       } catch (err) {
         alert('Error inserting image: ' + err.message);
+      } finally {
+        if (btn) { btn.innerText = origBtnText; btn.disabled = false; }
       }
     }
 

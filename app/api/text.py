@@ -26,6 +26,7 @@ async def edit_text(doc_id: str, req: TextEditRequest):
                 font_size=req.font_size,
                 color_rgb=req.color_rgb
             )
+            session.invalidate_page(req.page_index)
             session.save_to_disk()
         # Return updated page inspection
         return engine_manager.inspect_page(doc_id, req.page_index)
@@ -49,6 +50,7 @@ async def delete_text(doc_id: str, req: TextDeleteRequest):
                 bbox=req.bbox,
                 origin=req.origin
             )
+            session.invalidate_page(req.page_index)
             session.save_to_disk()
         return engine_manager.inspect_page(doc_id, req.page_index)
     except KeyError:
@@ -73,6 +75,7 @@ async def insert_text(doc_id: str, req: TextInsertRequest):
                 font_size=req.font_size,
                 color_rgb=req.color_rgb
             )
+            session.invalidate_page(req.page_index)
             session.save_to_disk()
         return engine_manager.inspect_page(doc_id, req.page_index)
     except KeyError:
