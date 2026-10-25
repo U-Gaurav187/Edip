@@ -3,14 +3,14 @@
 <div align="center">
 
 [![Live Web Studio](https://img.shields.io/badge/Live%20Web%20Studio-edip.run.place-blue?style=for-the-badge&logo=googlechrome&logoColor=white)](https://edip.run.place)
-[![Download Android APK](https://img.shields.io/badge/Download%20APK-v1.0.0%20Release-brightgreen?style=for-the-badge&logo=android&logoColor=white)](https://github.com/U-Gaurav187/pdf-editor-api/releases/latest/download/edip-v1.0.0.apk)
+[![Download Android APK](https://img.shields.io/badge/Download%20APK-v1.0.0%20Release-brightgreen?style=for-the-badge&logo=android&logoColor=white)](https://github.com/U-Gaurav187/Edip/releases/latest/download/edip-v1.0.0.apk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-red.svg?style=for-the-badge)](SECURITY.md)
 
 **A production-grade, Acrobat-grade PDF editing engine, interactive Web Studio, and native Android mobile application.**  
 *True PDF content stream editing (`Tj`, `TJ`, `cm`, `Do`), sub-100ms render caching, seamless strip inpainting, and C-native OCR synthesis.*
 
-[**Explore Live Web Studio**](https://edip.run.place) • [**Download Android App**](https://github.com/U-Gaurav187/pdf-editor-api/releases/latest/download/edip-v1.0.0.apk) • [**API Reference**](#-rest-api-reference) • [**Local Setup**](#-running-locally)
+[**Explore Live Web Studio**](https://edip.run.place) • [**Download Android App**](https://github.com/U-Gaurav187/Edip/releases/latest/download/edip-v1.0.0.apk) • [**API Reference**](#-rest-api-reference) • [**Local Setup**](#-running-locally)
 
 </div>
 
@@ -20,7 +20,7 @@
 
 * **Web Studio**: [https://edip.run.place](https://edip.run.place)
 * **API Documentation (Swagger UI)**: [https://edip.run.place/docs](https://edip.run.place/docs)
-* **Android Release APK**: [Download latest `edip-v1.0.0.apk`](https://github.com/U-Gaurav187/pdf-editor-api/releases/latest/download/edip-v1.0.0.apk)
+* **Android Release APK**: [Download latest `edip-v1.0.0.apk`](https://github.com/U-Gaurav187/Edip/releases/latest/download/edip-v1.0.0.apk)
 
 ---
 
@@ -159,7 +159,7 @@ PDF EDITOR/
 
 ```bash
 # Clone the repository
-git clone https://github.com/U-Gaurav187/pdf-editor-api.git
+git clone https://github.com/U-Gaurav187/Edip.git
 cd pdf-editor-api
 
 # Install dependencies
