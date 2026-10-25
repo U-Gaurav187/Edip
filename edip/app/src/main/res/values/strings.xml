@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Edip</string>
+    <string name="select_pdf">Open PDF</string>
+    <string name="export_pdf">Export PDF</string>
+    <string name="edit_text">Edit Text</string>
+    <string name="apply">Apply Edit</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+</resources>

@@ -11,7 +11,7 @@
 We take the security and integrity of this project seriously. If you discover a potential security vulnerability, please do NOT open a public issue.
 
 Instead, please report vulnerabilities privately:
-- Email: [gauravupadhya798@gmail.com](mailto:gauravupadhya798@gmail.com)
+- Email: [gauravu2007@gmail.com](mailto:gauravu2007@gmail.com)
 - Subject: `[SECURITY] PDF Engine Vulnerability Report`
 
 Please include:

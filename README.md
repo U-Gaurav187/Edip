@@ -1,60 +1,94 @@
-# Acrobat-Grade Native PDF Engine & Studio
+# Edip - Acrobat-Grade Native PDF Engine & Studio
 
-A production-grade PDF editing engine and web studio built from the ground up to perform **Real PDF Object Editing** matching Adobe Acrobat Pro's underlying architecture.
+<div align="center">
+
+[![Live Web Studio](https://img.shields.io/badge/Live%20Web%20Studio-edip.run.place-blue?style=for-the-badge&logo=googlechrome&logoColor=white)](https://edip.run.place)
+[![Download Android APK](https://img.shields.io/badge/Download%20APK-v1.0.0%20Release-brightgreen?style=for-the-badge&logo=android&logoColor=white)](https://github.com/U-Gaurav187/pdf-editor-api/releases/latest/download/edip-v1.0.0.apk)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+[![Security Policy](https://img.shields.io/badge/Security-Policy-red.svg?style=for-the-badge)](SECURITY.md)
+
+**A production-grade, Acrobat-grade PDF editing engine, interactive Web Studio, and native Android mobile application.**  
+*True PDF content stream editing (`Tj`, `TJ`, `cm`, `Do`), sub-100ms render caching, seamless strip inpainting, and C-native OCR synthesis.*
+
+[**Explore Live Web Studio**](https://edip.run.place) • [**Download Android App**](https://github.com/U-Gaurav187/pdf-editor-api/releases/latest/download/edip-v1.0.0.apk) • [**API Reference**](#-rest-api-reference) • [**Local Setup**](#-running-locally)
+
+</div>
+
+---
+
+## 🌐 Live Deployments & Applications
+
+* **Web Studio**: [https://edip.run.place](https://edip.run.place)
+* **API Documentation (Swagger UI)**: [https://edip.run.place/docs](https://edip.run.place/docs)
+* **Android Release APK**: [Download latest `edip-v1.0.0.apk`](https://github.com/U-Gaurav187/pdf-editor-api/releases/latest/download/edip-v1.0.0.apk)
 
 ---
 
 ## 🚫 Why Visual Overlay Hacks Are Eradicated
 
-Typical browser-based PDF editors simulate editing using:
-1. **White rectangles (`re`, `f`)** drawn over the original text to hide it.
-2. **Invisible text layers** placed on top of flattened images.
-3. **Annotation overlays** (`/Annots`) that can be deleted or uncovered by standard PDF viewers.
+Typical browser-based PDF editors simulate editing using visual hacks:
+1. **White rectangles (`re`, `f`)** drawn over the original text to conceal it.
+2. **Invisible text layers** positioned on top of flattened images.
+3. **Annotation overlays** (`/Annots`) that can be stripped or revealed by standard PDF viewers.
 
-### The Dangers of Overlay Hacks:
-- The original sensitive text is still present in the file stream underneath the white box, exposing private data.
-- Copy-pasting text copies both the old and new text or garbled glyphs.
-- Search indexing continues to find the hidden old text.
-- File sizes blow up with redundant raster images.
+### The Risks of Overlay Hacks:
+* **Data Leaks**: The original sensitive text remains inside the PDF content stream underneath the white box, exposing private information.
+* **Corrupted Copy-Paste**: Selecting text copies both the old and new text or garbled glyphs.
+* **Search Indexing**: Search engines and PDF viewers continue to index the concealed old text.
+* **Bloat**: File sizes balloon as pages are converted to heavy flattened bitmaps.
 
-### The Acrobat-Grade Approach in This Engine:
-- **Surgical Content Stream Eradication**: The engine parses the PDF `/Contents` stream and physically removes the target character drawing operators (`Tj`, `TJ`, `BT ... ET`). The old text is purged from the PDF stream entirely.
-- **True PDF Object Insertion**: Replacement text is re-inserted as genuine PDF drawing operators using matching font metrics, baseline matrices (`Tm`), and `/ToUnicode` CMaps.
-- **Clean Stream Consolidation**: Content streams are compacted and garbage-collected (`garbage=4`, `deflate=True`), leaving no residual artifacts.
-- **XObject Image Transformation**: Images are moved, resized, and rotated by updating the Current Transformation Matrix (`cm`) preceding the `/Image Do` operator in the content stream, or replacing the raw XObject stream directly.
+### The Acrobat-Grade Approach in Edip:
+* **Surgical Content Stream Eradication**: The engine parses the ISO 32000-1 `/Contents` stream and physically purges target character drawing operators (`Tj`, `TJ`, `BT ... ET`). The old text is permanently eradicated from the file stream.
+* **Genuine PDF Object Insertion**: Replacement text is inserted as true PDF drawing operators matching exact font metrics, baseline transformation matrices (`Tm`), and `/ToUnicode` CMaps.
+* **Seamless Background Healing & Vector Protection**: For scanned documents or raster brochures, seamless strip interpolation heals the raster background while strictly protecting vector line art and illustrations (`PDF_REDACT_LINE_ART_NONE`).
+* **Compaction & Garbage Collection**: Streams are cleaned, deflated, and compacted (`garbage=4`, `deflate=True`), producing clean, lightweight output.
+
+---
+
+## 📱 Edip Android Application (`edip/`)
+
+A high-performance native Android application built with **Kotlin** and **Jetpack Compose**, connecting directly to the live backend API at `https://edip.run.place`.
+
+* **Pinch-to-Zoom & Pan**: Fluid multi-touch gesture canvas enabling microscopic inspection of fine print, complex vector charts, and table rows.
+* **Tap-to-Select Text Objects**: Tap any word or line on screen to highlight bounding boxes and open the bottom sheet editor.
+* **Spatial Drag-to-Nudge**: Drag text objects visually on screen before committing changes to the backend.
+* **Precision Font Controls**: Real-time adjustment of font families (Helvetica, Times, Courier), font size steppers, and color swatches.
+* **Page Management**: Instant 90° page rotation, page reordering, and multi-page navigation.
+* **Native Storage & Sharing**: Pick any PDF from device storage, edit in real time, and export/share directly to WhatsApp, Gmail, Drive, or local storage.
 
 ---
 
 ## 🏛 Architecture & Component Diagram
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                   Acrobat Studio Web Interface                  │
-│       (Interactive Hotspot Canvas Overlay + Live AST Inspector)  │
-└────────────────────────────────┬─────────────────────────────────┘
-                                 │ REST / JSON (CORS-enabled)
-                                 ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                    FastAPI REST / Engine API                     │
-│  /api/documents  │  /api/pages  │  /api/text  │  /api/images     │
-│  /api/forms      │  /api/annots │  /api/ocr   │  /api/export     │
-└────────────────────────────────┬─────────────────────────────────┘
-                                 │
-         ┌───────────────────────┼────────────────────────┐
-         ▼                       ▼                        ▼
-┌──────────────────┐   ┌──────────────────┐    ┌──────────────────┐
-│   Text Editor    │   │   Image Editor   │    │  OCR Engine (C)  │
-│  Surgical glyph  │   │   cm Matrix &    │    │  Native MuPDF    │
-│  eradication &   │   │   XObject stream │    │  Tesseract       │
-│  exact insertion │   │   rewriter       │    │  (eng.tessdata)  │
-└────────┬─────────┘   └─────────┬────────┘    └────────┬─────────┘
-         │                       │                      │
-         └───────────────────────┼──────────────────────┘
-                                 ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                     Artifex MuPDF C-Engine                       │
-│    (ISO 32000-1 Page Tree, /Contents Parser, Font Dictionaries)  │
-└──────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────┐     ┌──────────────────────────────────────┐
+│           Edip Web Studio            │     │          Edip Android App            │
+│   (HTML5 Canvas + AST Hotspots)      │     │    (Jetpack Compose + Coil Canvas)   │
+└──────────────────┬───────────────────┘     └──────────────────┬───────────────────┘
+                   │                                            │
+                   │               REST / HTTPS                 │
+                   └─────────────────────┬──────────────────────┘
+                                         ▼
+┌───────────────────────────────────────────────────────────────────────────────────┐
+│                          FastAPI Core Engine Service                              │
+│       /api/documents  │  /api/pages  │  /api/text  │  /api/images  │  /api/ocr    │
+└────────────────────────────────────────┬──────────────────────────────────────────┘
+                                         │
+        ┌────────────────────────────────┼────────────────────────────────┐
+        ▼                                ▼                                ▼
+┌──────────────────┐           ┌──────────────────┐            ┌──────────────────┐
+│   Text Editor    │           │   Image Editor   │            │    OCR Engine    │
+│ Surgical glyph   │           │  cm Matrix &     │            │  MuPDF Native    │
+│ eradication &    │           │  XObject stream  │            │  Tesseract C-API │
+│ clean insertion  │           │  rewriter        │            │  (eng.tessdata)  │
+└───────┬──────────┘           └─────────┬────────┘            └────────┬─────────┘
+        │                                │                              │
+        └────────────────────────────────┼──────────────────────────────┘
+                                         ▼
+┌───────────────────────────────────────────────────────────────────────────────────┐
+│                              Artifex MuPDF C-Core                                 │
+│         (ISO 32000-1 Page Tree, Object Streams, Font Dictionaries, Inpainting)   │
+└───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -63,105 +97,122 @@ Typical browser-based PDF editors simulate editing using:
 
 ```
 PDF EDITOR/
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── documents.py      # Upload, session inspect, export, close
-│   │   │   ├── pages.py          # Render (raster PNG), rotate, reorder, delete
-│   │   │   ├── text.py           # Surgical text edit, delete, insert
-│   │   │   ├── images.py         # Image transform (cm matrix), replace, delete
-│   │   │   ├── forms.py          # AcroForms field update and creation
-│   │   │   ├── annotations.py    # Isolated PDF /Annots management
-│   │   │   └── ocr.py            # Scanned page detection and text layer synthesis
-│   │   ├── core/
-│   │   │   ├── engine.py         # Session manager, concurrency locks, AST generator
-│   │   │   ├── text_editor.py    # Surgical operator eradication & text object writer
-│   │   │   ├── image_editor.py   # XObject stream & cm transformation editor
-│   │   │   ├── stream_parser.py  # ISO 32000-1 graphics state tokenizer
-│   │   │   ├── font_manager.py   # Font resolution, standard 14 matching, embedded fonts
-│   │   │   ├── page_editor.py    # Page tree manipulation (reorder, duplicate, merge)
-│   │   │   ├── ocr_engine.py     # C-native Tesseract OCR layer builder
-│   │   │   ├── form_editor.py    # AcroForm interactive widget manager
-│   │   │   ├── annot_editor.py   # Native PDF annotation objects
-│   │   │   └── exporter.py       # Garbage-collected, deflated PDF/A / clean exporter
-│   │   ├── models/
-│   │   │   ├── requests.py       # Pydantic v2 schemas for all operations
-│   │   │   └── responses.py      # Pydantic v2 schemas for object AST
-│   │   ├── config.py             # Environment configuration (PORT, HOST, CORS)
-│   │   └── main.py               # FastAPI entrypoint + static Studio mount
-│   ├── static/
-│   │   └── index.html            # Acrobat Studio modern web interface
-│   ├── tessdata/
-│   │   └── eng.traineddata       # Free trained Tesseract model (4 MB)
-│   ├── tests/
-│   │   ├── test_stream_editing.py
-│   │   ├── test_image_editing.py
-│   │   ├── test_ocr.py
-│   │   └── test_full_pipeline.py
-│   ├── Dockerfile                # Cloud-ready container definition
-│   ├── requirements.txt
-│   └── run_server.py             # Cloud server runner
-├── deploy/
-│   ├── render.yaml               # 1-click free deploy blueprint on Render
-│   └── docker-compose.yml        # Docker compose configuration
-└── README.md
+├── app/
+│   ├── api/
+│   │   ├── documents.py         # Upload, session inspect, export, filename sanitization
+│   │   ├── pages.py             # Raster render (PNG/JPEG), rotation, reorder, delete
+│   │   ├── text.py              # Surgical text edit, delete, insert
+│   │   ├── images.py            # Image transform (cm matrix), replace, delete
+│   │   ├── forms.py             # AcroForms field inspection and updates
+│   │   ├── annotations.py       # Isolated PDF /Annots management
+│   │   └── ocr.py               # Scanned page detection and text layer synthesis
+│   ├── core/
+│   │   ├── engine.py            # Session manager, in-memory render caching, AST
+│   │   ├── text_editor.py       # Operator eradication, font match, seamless inpainting
+│   │   ├── image_editor.py      # XObject stream & cm transformation matrix editor
+│   │   ├── stream_parser.py     # ISO 32000-1 graphics state tokenizer
+│   │   ├── font_manager.py      # Font metric matching and resolution
+│   │   ├── page_editor.py       # Page tree manipulation (reorder, duplicate, merge)
+│   │   ├── ocr_engine.py        # Native Tesseract OCR text layer builder
+│   │   └── exporter.py          # Garbage-collected, deflated PDF/A clean exporter
+│   ├── models/                  # Pydantic v2 schemas for requests and AST responses
+│   ├── config.py                # Environment configuration (PORT, HOST, CORS)
+│   └── main.py                  # FastAPI entrypoint + static Studio mount
+├── static/
+│   └── index.html               # Web Studio single-page application
+├── edip/                        # Native Android Studio project (Jetpack Compose)
+│   ├── app/                     # Android app module (UI, ViewModels, Retrofit)
+│   ├── build.gradle.kts         # Root and app build configurations
+│   └── settings.gradle.kts
+├── tessdata/
+│   └── eng.traineddata          # Free trained Tesseract model
+├── tests/                       # Automated pytest test suites (15 tests, 100% pass)
+├── Dockerfile                   # Cloud container definition
+├── requirements.txt             # Python dependencies
+├── run_server.py                # Server runner
+├── .env.example                 # Environment variable template
+├── .gitignore                   # Comprehensive git protection rules
+└── SECURITY.md                  # Private vulnerability reporting policy
 ```
 
 ---
 
-## 🚀 100% Free Cloud Deployment (Zero Credit Card Required)
+## 🔌 REST API Reference
 
-This project is built using purely open-source components:
-- **No paid PDF SDK licenses** (uses Artifex MuPDF C-core via PyMuPDF).
-- **No paid OCR APIs** (uses native C Tesseract engine with bundled `eng.traineddata`).
-- **No hardcoded localhost**: Reads `$HOST` (default `0.0.0.0`) and `$PORT` dynamically from the environment.
-- **CORS enabled**: Can connect to any external web or desktop frontend.
-
-### Option 1: Deploy on Render (Free Web Service)
-1. Push this repository to GitHub.
-2. In Render dashboard (free account, no credit card needed), click **New +** → **Blueprint** or **Web Service**.
-3. Select your repository.
-4. Render will automatically read `deploy/render.yaml` and launch the service.
-5. Your API and Studio will be live at `https://your-service.onrender.com`.
-
-### Option 2: Deploy on Hugging Face Spaces (Free Docker SDK)
-1. Create a new Space on [Hugging Face](https://huggingface.co/spaces).
-2. Choose **Docker** as the Space SDK.
-3. Upload the repository.
-4. Hugging Face builds and hosts the container for free on cloud CPUs.
-
-### Option 3: Deploy on Railway / Fly.io / VPS
-Run with Docker:
-```bash
-docker build -t acrobatic-pdf-engine backend/
-docker run -p 8000:8000 acrobatic-pdf-engine
-```
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/documents/upload` | Upload PDF or image; initializes an isolated session |
+| `GET` | `/api/documents/{id}/pages/{page}/inspect` | Returns full AST (text spans, bounding boxes, images, forms) |
+| `GET` | `/api/documents/{id}/pages/{page}/render` | High-fidelity raster render (`dpi`, `format`, `quality`) |
+| `POST` | `/api/documents/{id}/text/edit` | Surgical in-place text replacement |
+| `POST` | `/api/documents/{id}/text/delete` | Eradicate text span without leaving visual traces |
+| `POST` | `/api/documents/{id}/images/{img}/transform` | Move, resize, or rotate image via `cm` matrix |
+| `POST` | `/api/documents/{id}/pages/{page}/rotate` | Rotate page in 90° increments |
+| `POST` | `/api/documents/{id}/pages/{page}/ocr` | Run C-native OCR and synthesize selectable text |
+| `GET` | `/api/documents/{id}/export` | Download clean, deflated, compacted PDF |
 
 ---
 
 ## 💻 Running Locally
 
-### 1. Install Dependencies
+### 1. Backend & Web Studio
+
 ```bash
-cd backend
+# Clone the repository
+git clone https://github.com/U-Gaurav187/pdf-editor-api.git
+cd pdf-editor-api
+
+# Install dependencies
 pip install -r requirements.txt
-```
 
-### 2. Run Automated Verification Tests
-```bash
+# Run automated tests
 python -m pytest tests -v
-```
-All tests verify:
-- Complete eradication of old text operators (no white boxes, no hidden text).
-- Surgical image XObject replacement and transformation matrix updates.
-- OCR text layer synthesis on scanned documents.
-- End-to-end upload, edit, raster rendering, and clean PDF export.
 
-### 3. Launch the Server & Studio
-```bash
+# Start the application
 python run_server.py
 ```
-Open your browser to:
-- **Web Studio**: `http://localhost:8000`
-- **Interactive Swagger API Docs**: `http://localhost:8000/docs`
-- **Health Check**: `http://localhost:8000/health`
+
+Access locally at:
+* **Web Studio**: `http://localhost:8000`
+* **Swagger API Docs**: `http://localhost:8000/docs`
+
+### 2. Android Mobile Application
+
+1. Open **Android Studio** (Ladybug or later recommended).
+2. Select **Open** and choose the `edip/` directory.
+3. Allow Gradle to sync dependencies.
+4. Select your connected device or emulator and click **Run (▶)**.
+
+---
+
+## ☁️ Free Cloud Deployment
+
+### Deploy with Docker
+```bash
+docker build -t edip-engine .
+docker run -p 8000:8000 edip-engine
+```
+
+### Deploy to Render / Hugging Face
+1. Create a new Web Service or Space connected to this repository.
+2. The bundled `Dockerfile` automatically installs Tesseract C-libraries and configures the environment.
+3. Bind `$PORT` and `$HOST` dynamically via environment variables.
+
+---
+
+## 🔒 Security & Vulnerability Reporting
+
+Security and user privacy are strictly prioritized:
+* **No hardcoded secrets or API keys**: The engine runs entirely on local/open-source libraries.
+* **Safe In-Memory Redactions**: Redactions permanently remove underlying stream operators.
+* **Path Traversal Protection**: Upload and export filenames are rigorously sanitized.
+
+To report a vulnerability privately, please review our [Security Policy](SECURITY.md) or email:  
+📧 **gauravu2007@gmail.com** (Subject: `[SECURITY] PDF Engine Vulnerability Report`)
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
+Made with ❤️ by [Gaurav](https://github.com/U-Gaurav187).
