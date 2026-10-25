@@ -7,8 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-red.svg?style=for-the-badge)](SECURITY.md)
 
-**A production-grade, Acrobat-grade PDF editing engine, interactive Web Studio, and native Android mobile application.**  
-*True PDF content stream editing (`Tj`, `TJ`, `cm`, `Do`), sub-100ms render caching, seamless strip inpainting, and C-native OCR synthesis.*
+### A true in-place PDF editor for Web & Android that edits text, images, and scanned documents without fake white-box overlays or quality loss.
 
 [**Explore Live Web Studio**](https://edip.run.place) • [**Download Android App**](https://github.com/U-Gaurav187/Edip/releases/latest/download/edip-v1.0.0.apk) • [**API Reference**](#-rest-api-reference) • [**Local Setup**](#-running-locally)
 
@@ -16,10 +15,25 @@
 
 ---
 
+## 🎯 What Does Edip Do?
+
+**Edip** is a complete, free, and open-source PDF editing suite that matches Adobe Acrobat Pro's underlying architecture. Most online PDF editors simply draw a white rectangle over the old text and place new text on top. **Edip does real, object-level editing:**
+
+* ✍️ **Edit Text Directly in Any PDF**: Click on any word, number, title, or table cell to edit it in place. Edip automatically identifies and matches the original font family, font size, baseline alignment, and text color.
+* 🧼 **Zero Fake White Boxes (No Hidden Text Leaks)**: Unlike typical editors that leave the original private text hidden underneath a white rectangle, Edip surgically eradicates the old character drawing operators from the PDF's internal ISO 32000-1 content stream. The old text is permanently gone, preventing confidential data leaks, copy-paste glitches, and broken search indexing.
+* 📷 **Scanned Documents & Photos (Built-in OCR)**: Upload scanned contracts, invoices, or photos. Edip's native C Tesseract engine automatically recognizes the text, generates a clean text layer, and makes every character editable.
+* 🎨 **Seamless Background Healing**: When editing text on graphic brochures or scanned paper textures, Edip samples surrounding pixels and seamlessly interpolates the background underneath the modified text while strictly preserving vector line art and illustrations (`PDF_REDACT_LINE_ART_NONE`).
+* 🖼️ **Transform & Replace Images**: Move, resize, or replace embedded images directly inside the PDF content stream via transformation matrices (`cm`) without losing resolution or re-encoding other page elements.
+* 🔄 **Instant Page Management**: Rotate pages by 90°, delete unwanted pages, or reorder pages in milliseconds.
+* 📱 **Native Android Mobile App**: Edit PDFs on the go with a dedicated Android application featuring multi-touch pinch-to-zoom, tap-to-select words, drag-to-nudge spatial positioning, and direct export to WhatsApp, Drive, or Gmail.
+* 🌐 **Instant Web Studio**: Use the web editor at [**edip.run.place**](https://edip.run.place) directly from any desktop or mobile browser with zero installation or account sign-ups.
+
+---
+
 ## 🌐 Live Deployments & Applications
 
 * **Web Studio**: [https://edip.run.place](https://edip.run.place)
-* **API Documentation (Swagger UI)**: [https://edip.run.place/docs](https://edip.run.place/docs)
+* **Interactive API Documentation (Swagger UI)**: [https://edip.run.place/docs](https://edip.run.place/docs)
 * **Android Release APK**: [Download latest `edip-v1.0.0.apk`](https://github.com/U-Gaurav187/Edip/releases/latest/download/edip-v1.0.0.apk)
 
 ---
@@ -132,6 +146,7 @@ PDF EDITOR/
 ├── run_server.py                # Server runner
 ├── .env.example                 # Environment variable template
 ├── .gitignore                   # Comprehensive git protection rules
+├── LICENSE                      # Official MIT Open Source License
 └── SECURITY.md                  # Private vulnerability reporting policy
 ```
 
@@ -160,7 +175,7 @@ PDF EDITOR/
 ```bash
 # Clone the repository
 git clone https://github.com/U-Gaurav187/Edip.git
-cd pdf-editor-api
+cd Edip
 
 # Install dependencies
 pip install -r requirements.txt
@@ -214,5 +229,5 @@ To report a vulnerability privately, please review our [Security Policy](SECURIT
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
-Made with ❤️ by [Gaurav](https://github.com/U-Gaurav187).
+This project is licensed under the [MIT License](LICENSE).  
+Copyright (c) 2026 Gaurav Upadhyay.
