@@ -1,4 +1,5 @@
 import logging
+import re
 import uuid
 from pathlib import Path
 import pymupdf
@@ -27,7 +28,10 @@ async def upload_document(
     Streams chunks directly to disk to minimize memory usage for large files (e.g. 30MB+ brochures).
     Images are seamlessly converted to high-fidelity PDF pages.
     """
-    filename = file.filename or "document.pdf"
+    raw_filename = Path(file.filename or "document.pdf").name
+    filename = re.sub(r'[^a-zA-Z0-9_.-]', '_', raw_filename)
+    if not filename.strip('.').strip():
+        filename = "document.pdf"
     content_type = file.content_type or ""
     logger.info(f"Upload received: filename='{filename}', content_type='{content_type}', size_header={file.size}")
 
@@ -151,7 +155,8 @@ async def export_document(
                 deflate=deflate
             )
             
-        base_name = session.filename.rsplit(".", 1)[0]
+        raw_base = session.filename.rsplit(".", 1)[0] if "." in session.filename else "document"
+        base_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', raw_base) or "document"
         output_filename = f"{base_name}_edited.pdf"
         
         return Response(

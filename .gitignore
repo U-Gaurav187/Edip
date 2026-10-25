@@ -1,0 +1,97 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller / Executables
+*.manifest
+*.spec
+*.exe
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+pytestdebug.log
+
+# Environments and Secrets
+.env
+.env.*
+*.env
+!.env.example
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+secrets/
+*.pem
+*.key
+*.crt
+*.pfx
+credentials.json
+client_secret*.json
+
+# Storage & Temporary Session PDFs
+storage/
+/tmp/
+*.tmp
+*.tmp.pdf
+*.log
+
+# Local test outputs & sample user documents
+live_exported*.pdf
+live_exported2*.pdf
+test_edited_out*.pdf
+sample_document*.pdf
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Scratch files and temporary git clones
+scratch/
+staging_git/
+temp_git_clone/
+crop_glitches.py
+zoom_notice.py
+test_widths.py
+test_live_workflow.py
